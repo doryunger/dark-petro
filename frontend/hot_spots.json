@@ -1,0 +1,137 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "malaysia_eopl"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       103.5,
+       0.8
+      ],
+      [
+       106.0,
+       0.8
+      ],
+      [
+       106.0,
+       1.8
+      ],
+      [
+       103.5,
+       1.8
+      ],
+      [
+       103.5,
+       0.8
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "johor_east_scs"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       103.5,
+       1.8
+      ],
+      [
+       106.0,
+       1.8
+      ],
+      [
+       106.0,
+       2.8
+      ],
+      [
+       103.5,
+       2.8
+      ],
+      [
+       103.5,
+       1.8
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "fujairah_outer"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       56.3,
+       24.8
+      ],
+      [
+       57.2,
+       24.8
+      ],
+      [
+       57.2,
+       25.8
+      ],
+      [
+       56.3,
+       25.8
+      ],
+      [
+       56.3,
+       24.8
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "off_sohar"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       56.6,
+       24.2
+      ],
+      [
+       57.6,
+       24.2
+      ],
+      [
+       57.6,
+       24.9
+      ],
+      [
+       56.6,
+       24.9
+      ],
+      [
+       56.6,
+       24.2
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

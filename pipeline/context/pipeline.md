@@ -34,7 +34,7 @@
   - Zoom 10-13: a hot spot is broken into four quadrants (NE, SE, SW, NW), cut from the centre of the hot spot, shown only when the pairs on the display exceed 20.
   - Zoom 14 and up: the list decides how many clusters there are from the pairs on the display, shown only when they exceed 20. Each cluster is drawn as a circle around its pairs and named A, B, C, D from west to east.
   - Below that threshold of 20 no clusters are shown and the list holds individual pairs. The boundaries of the areas are still drawn so the area stays visible.
-  - The hot-spot areas are the monitor's own site rectangles (name plus bounding box, in its `sts_watch` rules). This repo owns a copy of only the names and boxes, never the monitor's explanatory text. `malaysia_eopl` and `johor_east_scs` touch along one edge. A hot spot with no data is shown as its boundary and name only.
+  - The hot-spot areas are the monitor's own site rectangles (name plus bounding box, in its `sts_watch` rules). This repo owns a copy of only the names and boxes, never the monitor's explanatory text: `frontend/hot_spots.json`, a GeoJSON polygon per hot spot, copied once from the monitor's rules and edited here from now on. `malaysia_eopl` and `johor_east_scs` touch along one edge. A hot spot with no data is shown as its boundary and name only.
 - Start view: the app fits the four hot-spot boxes with padding for the reel, capped at zoom 4, so that all four are visible whatever the screen width. A fixed zoom 4 centred at about 81.1°E, 13.3°N only shows all four when the map area is about 1250 px wide, which with a reel of about 450 px needs a window wider than about 1700 px.
 
 ## Reel and map behaviour (design, frontend not built yet)
