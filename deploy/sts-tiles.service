@@ -1,0 +1,9 @@
+[Unit]
+Description=STS viewer: mirror findings Parquets from S3 and build MVT (PMTiles)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker run --rm --name sts-tiles --user 1000:1000 --memory 400m --env-file @APP_DIR@/.env -v @APP_DIR@/data:/data sts-tiles run
+TimeoutStartSec=600

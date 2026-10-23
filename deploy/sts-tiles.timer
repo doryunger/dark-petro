@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly safety net: reconcile with S3 in case an SQS event was missed
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
