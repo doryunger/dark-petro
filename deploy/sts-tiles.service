@@ -1,5 +1,5 @@
 [Unit]
-Description=STS viewer: mirror findings Parquets from S3 and build MVT (PMTiles)
+Description=STS viewer: mirror findings Parquets from S3 and build the public findings table
 Wants=network-online.target
 After=network-online.target docker.service
 

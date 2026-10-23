@@ -1,6 +1,11 @@
+import tempfile
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
+import pyarrow.parquet as pq
+
+from sts_tiles import build as B
 from sts_tiles import features as F
 
 
@@ -17,44 +22,6 @@ def row(**over):
 
 
 class Features(unittest.TestCase):
-    def test_pair_props_are_filterable_scalars(self):
-        p = F.pair_props(row())
-        self.assertEqual(p["t"], 1792565558)
-        self.assertEqual(p["date"], "2026-10-21")
-        self.assertEqual(p["day"], 20747)
-        self.assertEqual(p["named"], 1)
-        self.assertEqual(p["length_m"], 367.5)
-        self.assertFalse(p["sanctioned"])
-        self.assertNotIn("v1_name", p)
-        self.assertTrue(all(not isinstance(v, (dict, list)) for v in p.values()))
-
-    def test_sanctioned_if_either_vessel(self):
-        self.assertTrue(F.pair_props(row(vessel_1_is_sanctioned=True))["sanctioned"])
-
-    def test_layers(self):
-        f = F.features(row())
-        self.assertEqual((len(f["pairs"]), len(f["vessels"]), len(f["links"])), (1, 2, 1))
-        self.assertEqual(f["vessels"][0]["tippecanoe"]["minzoom"], F.VESSEL_MINZOOM)
-        self.assertEqual([v["properties"]["slot"] for v in f["vessels"]], [1, 2])
-        for layer in f.values():
-            self.assertEqual(layer[0]["properties"]["day"], 20747)
-
-    def test_no_link_without_both_positions(self):
-        f = F.features(row(vessel_2_lat=None))
-        self.assertEqual((len(f["vessels"]), len(f["links"])), (1, 0))
-
-    def test_index_entry_groups_vessels(self):
-        e = F.index_entry(row())
-        self.assertEqual(e["vessels"][1]["name"], "ASTRO SIRIUS")
-        self.assertEqual(e["measures"]["width_ratio"], 1.2)
-        self.assertFalse(any(k.startswith("vessel_") for k in e))
-        self.assertEqual(e["capture_utc"], "2026-10-21T06:52:38+00:00")
-
-    def test_index_entry_has_no_internal_columns(self):
-        e = F.index_entry(row(job_id="j", attempt_id="a", review_prefix="catalogue/x/", code_commit="c", rules_sha256="r", scene_id="S2", _source_mtime=1))
-        for k in (*F.INTERNAL_COLUMNS, "_source_mtime", "source_key"):
-            self.assertNotIn(k, e)
-
     def test_input_hash_is_order_free_and_etag_sensitive(self):
         a = F.input_hash({"x": "1", "y": "2"})
         self.assertEqual(a, F.input_hash({"y": "2", "x": "1"}))
@@ -66,6 +33,19 @@ class Features(unittest.TestCase):
 
     def test_captures(self):
         self.assertEqual(F.captures([row(), row(capture_markers_png=None)]), {"captures/a.png", "captures/a_markers.png"})
+
+
+class Table(unittest.TestCase):
+    def test_parquet_has_no_internal_columns(self):
+        rows = [row(job_id="j", attempt_id="a", review_prefix="catalogue/x/", code_commit="c", rules_sha256="r", scene_id="S2", _source_mtime=1, source_key="sts/x.parquet")]
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "findings.parquet"
+            B.write_table(rows, target)
+            names = pq.read_table(target).column_names
+        for k in (*F.INTERNAL_COLUMNS, "_source_mtime", "source_key"):
+            self.assertNotIn(k, names)
+        self.assertIn("finding_id", names)
+        self.assertIn("capture_png", names)
 
 
 if __name__ == "__main__":

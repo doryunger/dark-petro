@@ -2,25 +2,23 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from . import features as F
 
 log = logging.getLogger(__name__)
-LAYERS = ("pairs", "vessels", "links")
-TIPPECANOE = os.environ.get("TIPPECANOE", "tippecanoe")
 
 
 def read_table(mirror: Path, keys: list[str]):
     files = [str(mirror / k) for k in keys]
     con = duckdb.connect()
     con.execute("SET TimeZone = 'UTC'")
-    return con.execute("SELECT * EXCLUDE (geometry) FROM read_parquet(?, union_by_name = true, filename = true)", [files]).fetch_arrow_table()
+    return con.execute("SELECT * EXCLUDE (geometry) FROM read_parquet(?, union_by_name = true, filename = true)", [files]).to_arrow_table()
 
 
 def read_rows(mirror: Path, keys: list[str]) -> list[dict]:
@@ -37,29 +35,10 @@ def read_rows(mirror: Path, keys: list[str]) -> list[dict]:
     return rows
 
 
-def write_layers(rows: list[dict], out: Path) -> dict[str, int]:
-    counts = dict.fromkeys(LAYERS, 0)
-    handles = {layer: (out / f"{layer}.geojsonl").open("w") for layer in LAYERS}
-    try:
-        for row in rows:
-            for layer, feats in F.features(row).items():
-                for feat in feats:
-                    handles[layer].write(json.dumps(feat, separators=(",", ":")) + "\n")
-                    counts[layer] += 1
-    finally:
-        for h in handles.values():
-            h.close()
-    return counts
-
-
-def tippecanoe(work: Path, target: Path, counts: dict[str, int]) -> None:
-    cmd = [TIPPECANOE, "-o", str(target), "--force", "--quiet", "-n", "sts-findings",
-           "-Z0", "-z14",
-           "-r1", "--no-feature-limit", "--no-tile-size-limit"]
-    for layer in LAYERS:
-        if counts[layer]:
-            cmd += ["-L", f"{layer}:{work / f'{layer}.geojsonl'}"]
-    subprocess.run(cmd, check=True)
+def write_table(rows: list[dict], target: Path) -> None:
+    drop = set(F.INTERNAL_COLUMNS) | {"source_key"}
+    clean = [{k: v for k, v in r.items() if k not in drop and not k.startswith("_")} for r in rows]
+    pq.write_table(pa.Table.from_pylist(clean), target)
 
 
 def summary(rows: list[dict]) -> dict:
@@ -86,23 +65,14 @@ def build(cfg, inputs: dict[str, str], rows: list[dict], missing_captures: list[
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir()
     try:
-        counts = write_layers(rows, work)
-        tippecanoe(work, work / "sts.pmtiles", counts)
-        for layer in LAYERS:
-            (work / f"{layer}.geojsonl").unlink()
-        index = [F.index_entry({k: v for k, v in r.items() if not k.startswith("_")}) for r in rows]
-        (work / "findings.json").write_text(json.dumps(index, default=str, separators=(",", ":")))
-        table = read_table(cfg.mirror, sorted(inputs))
-        pq.write_table(table.drop_columns(["filename", *(c for c in F.INTERNAL_COLUMNS if c in table.column_names)]), work / "findings.parquet")
+        write_table(rows, work / "findings.parquet")
         manifest = {
             "build_id": name,
             "built_utc": datetime.now(timezone.utc).isoformat(),
             "input_hash": digest,
             "inputs": [{"key": k, "etag": inputs[k]} for k in sorted(inputs)],
-            "features": counts,
             "missing_captures": missing_captures,
-            "layers": {"pairs": {"minzoom": 0}, "vessels": {"minzoom": F.VESSEL_MINZOOM}, "links": {"minzoom": F.VESSEL_MINZOOM}},
-            "files": {"tiles": "sts.pmtiles", "index": "findings.json", "table": "findings.parquet", "capture_root": "mirror/"},
+            "files": {"table": "findings.parquet", "capture_root": "mirror/"},
             **summary(rows),
         }
         (work / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str))
