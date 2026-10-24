@@ -144,6 +144,7 @@ class Serving(unittest.TestCase):
         self.assertEqual((one["v1_name"], one["v1_flag"], one["v1_imo"], one["v1_sanctioned"]), ("VESSEL ONE 1", "PA", "9123456", False))
         self.assertEqual((one["v2_flag"], one["v2_sanctioned"], one["sanctioned"]), ("KM", True, True))
         self.assertIn("yaw", one)
+        self.assertEqual((one["lon"], one["lat"]), (57.501, 24.601))
         self.assertNotIn("v2_name", one)
         self.assertNotIn("v2_imo", one)
 

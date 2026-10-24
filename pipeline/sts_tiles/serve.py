@@ -24,7 +24,7 @@ TILE_MARGIN = 0.1
 TILE_SQL = """
 SELECT ST_AsMVT({
   'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
-  'sanctioned': sanctioned, 'image': capture_png, 'yaw': yaw,
+  'sanctioned': sanctioned, 'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
   'v1_name': vessel_1_name, 'v1_flag': vessel_1_flag, 'v1_imo': vessel_1_imo, 'v1_sanctioned': v1_sanctioned,
   'v2_name': vessel_2_name, 'v2_flag': vessel_2_flag, 'v2_imo': vessel_2_imo, 'v2_sanctioned': v2_sanctioned
 }, 'pairs')
