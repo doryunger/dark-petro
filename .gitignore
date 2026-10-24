@@ -4,3 +4,4 @@ node_modules/
 data/
 deploy/deploy.env
 frontend/.env.local
+frontend/dist/

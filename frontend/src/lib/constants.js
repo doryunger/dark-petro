@@ -1,0 +1,9 @@
+export const QUERY_ZOOM = 13;
+export const FLY_ZOOM = 15;
+export const MAX_TILE_ZOOM = 14;
+export const START_MAX_ZOOM = 4;
+export const ROW_HEIGHT = 70;
+export const ROW_TOP = 8;
+export const SOURCE_NAMES = { s1: "Sentinel-1", s2: "Sentinel-2" };
+export const TOAST_MS = 6000;
+export const WEEK_DAYS = 7;
