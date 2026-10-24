@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DarkPetro</title>
+<link rel="stylesheet" href="layout.css">
+</head>
+<body>
+<header class="header">
+  <h1 class="title">DarkPetro</h1>
+</header>
+<section class="filters">
+  <div class="field">
+    <h2 class="field-title">Time range</h2>
+    <div class="range">
+      <div class="range-limits">
+        <span>01.09.2026</span>
+        <span>24.10.2026</span>
+      </div>
+      <div class="range-track">
+        <span class="range-fill"></span>
+        <span class="range-handle range-handle-start"></span>
+        <span class="range-handle range-handle-end"></span>
+      </div>
+      <div class="range-label">17.10.2026 – 24.10.2026</div>
+    </div>
+  </div>
+  <div class="field">
+    <h2 class="field-title">Source</h2>
+    <div class="sources">
+      <label class="source"><input type="checkbox" checked>Sentinel-1</label>
+      <label class="source"><input type="checkbox" checked>Sentinel-2</label>
+      <button class="filter-button" type="button">Filter</button>
+    </div>
+  </div>
+</section>
+<section class="entries"></section>
+<section class="details"></section>
+<main class="map"></main>
+</body>
+</html>
