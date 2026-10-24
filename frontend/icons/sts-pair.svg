@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 128" width="56" height="128">
+  <defs>
+    <path id="ship" d="M12 0C17 6 24 20 24 34L24 108C24 118 20 126 17 128L7 128C4 126 0 118 0 108L0 34C0 20 7 6 12 0Z"/>
+  </defs>
+  <g fill="#f2c230" transform="rotate(180 28 64)">
+    <use href="#ship" x="0"/>
+    <use href="#ship" x="32"/>
+  </g>
+</svg>
