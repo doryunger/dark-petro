@@ -10,6 +10,10 @@ class Config:
     data_dir: Path
     keep_builds: int
     region: str | None
+    port: int
+    app_dir: Path
+    extension_dir: str
+    duckdb_memory: str
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -19,6 +23,10 @@ class Config:
             data_dir=Path(os.environ.get("STS_DATA_DIR", "/data")),
             keep_builds=int(os.environ.get("STS_KEEP_BUILDS", "5")),
             region=os.environ.get("AWS_REGION") or None,
+            port=int(os.environ.get("STS_PORT", "8080")),
+            app_dir=Path(os.environ.get("STS_APP_DIR", "/app/dist")),
+            extension_dir=os.environ.get("STS_DUCKDB_EXTENSIONS", "/opt/duckdb-extensions"),
+            duckdb_memory=os.environ.get("STS_DUCKDB_MEMORY", "200MB"),
         )
 
     @property

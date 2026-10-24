@@ -35,10 +35,29 @@ def read_rows(mirror: Path, keys: list[str]) -> list[dict]:
     return rows
 
 
+TABLE_TYPES = {
+    "finding_id": pa.string(),
+    "lat": pa.float64(),
+    "lon": pa.float64(),
+    "capture_utc": pa.timestamp("us", tz="UTC"),
+    "hot_spot": pa.string(),
+    "source": pa.string(),
+    "capture_png": pa.string(),
+    "yaw": pa.float64(),
+    **{f"vessel_{n}_{k}": t for n in (1, 2) for k, t in (("name", pa.string()), ("flag", pa.string()), ("imo", pa.string()), ("is_sanctioned", pa.bool_()))},
+}
+
+
 def write_table(rows: list[dict], target: Path) -> None:
     drop = set(F.INTERNAL_COLUMNS) | {"source_key"}
-    clean = [{k: v for k, v in r.items() if k not in drop and not k.startswith("_")} for r in rows]
-    pq.write_table(pa.Table.from_pylist(clean), target)
+    clean = [{k: v for k, v in r.items() if k not in drop and not k.startswith("_")} | {"yaw": F.yaw(r)} for r in rows]
+    table = pa.Table.from_pylist(clean)
+    for name, kind in TABLE_TYPES.items():
+        if name not in table.column_names:
+            table = table.append_column(name, pa.nulls(table.num_rows, kind))
+        elif table.schema.field(name).type != kind:
+            table = table.set_column(table.column_names.index(name), name, table.column(name).cast(kind))
+    pq.write_table(table, target)
 
 
 def summary(rows: list[dict]) -> dict:

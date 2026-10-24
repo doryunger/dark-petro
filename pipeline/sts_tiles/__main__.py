@@ -68,11 +68,14 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", stream=sys.stdout)
     logging.getLogger("botocore").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(prog="sts_tiles")
-    parser.add_argument("command", choices=("run", "build", "listen"), nargs="?", default="run")
+    parser.add_argument("command", choices=("run", "build", "listen", "serve"), nargs="?", default="run")
     parser.add_argument("--force", action="store_true", help="rebuild even when the inputs are unchanged")
     args = parser.parse_args()
     cfg = Config.from_env()
     cfg.data_dir.mkdir(parents=True, exist_ok=True)
+    if args.command == "serve":
+        from .serve import serve
+        return serve(cfg)
     if args.command == "listen":
         from .listen import listen
         queue_url = os.environ.get("STS_QUEUE_URL")

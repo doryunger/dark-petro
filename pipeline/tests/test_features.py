@@ -31,6 +31,18 @@ class Features(unittest.TestCase):
         rows, dropped = F.dedupe([row(_source_mtime=1, qa_status="old"), row(_source_mtime=2, qa_status="new")])
         self.assertEqual((len(rows), dropped, rows[0]["qa_status"]), (1, 1, "new"))
 
+    def test_yaw_is_the_pair_axis(self):
+        east = row(vessel_1_lat=10.0, vessel_1_lon=50.0, vessel_2_lat=10.0, vessel_2_lon=50.001)
+        north = row(vessel_1_lat=10.0, vessel_1_lon=50.0, vessel_2_lat=10.001, vessel_2_lon=50.0)
+        west = row(vessel_1_lat=10.0, vessel_1_lon=50.0, vessel_2_lat=10.0, vessel_2_lon=49.999)
+        self.assertAlmostEqual(F.yaw(east), 180.0, delta=0.2)
+        self.assertAlmostEqual(F.yaw(north), 90.0, delta=0.2)
+        self.assertLess(min(F.yaw(west), 360 - F.yaw(west)), 0.2)
+
+    def test_yaw_is_empty_without_both_positions(self):
+        self.assertIsNone(F.yaw(row(vessel_2_lat=None)))
+        self.assertIsNone(F.yaw(row(vessel_1_lon=None)))
+
     def test_captures(self):
         self.assertEqual(F.captures([row(), row(capture_markers_png=None)]), {"captures/a.png", "captures/a_markers.png"})
 
@@ -46,6 +58,21 @@ class Table(unittest.TestCase):
             self.assertNotIn(k, names)
         self.assertIn("finding_id", names)
         self.assertIn("capture_png", names)
+        self.assertIn("yaw", names)
+
+    def test_parquet_has_every_column_the_tiles_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "findings.parquet"
+            B.write_table([row()], target)
+            schema = pq.read_table(target).schema
+        for name, kind in B.TABLE_TYPES.items():
+            self.assertEqual(schema.field(name).type, kind, name)
+
+    def test_integer_imo_becomes_text(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "findings.parquet"
+            B.write_table([row(vessel_1_imo=9123456)], target)
+            self.assertEqual(pq.read_table(target).column("vessel_1_imo").to_pylist(), ["9123456"])
 
 
 if __name__ == "__main__":
