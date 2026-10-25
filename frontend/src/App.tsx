@@ -6,6 +6,7 @@ import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
 import { fetchMetadata } from "./lib/api";
+import { SELECT_GRACE_MS } from "./lib/constants";
 import { addDays, defaultFilter, todayUtc } from "./lib/dates";
 import { sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
@@ -25,6 +26,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const mapRef = useRef<MapHandle>(null);
   const reelRef = useRef<ReelHandle>(null);
+  const selectedAt = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -44,9 +46,17 @@ export default function App() {
     if (meta) setFilter(defaultFilter(todayUtc(), meta.sources));
   }, [meta]);
 
+  useEffect(() => {
+    if (!selected || viewEntries.some((e) => e.id === selected.id)) return undefined;
+    const wait = Math.max(0, selectedAt.current + SELECT_GRACE_MS - Date.now());
+    const timer = setTimeout(() => setSelected((current) => (current?.id === selected.id ? null : current)), wait);
+    return () => clearTimeout(timer);
+  }, [viewEntries, selected]);
+
   const entries = useMemo(() => sortEntries(viewEntries, order), [viewEntries, order]);
 
   const select = useCallback((entry: Entry, fromMap: boolean) => {
+    selectedAt.current = Date.now();
     setSelected(entry);
     mapRef.current?.flyTo(entry);
     if (fromMap) requestAnimationFrame(() => reelRef.current?.reveal(entry.id));

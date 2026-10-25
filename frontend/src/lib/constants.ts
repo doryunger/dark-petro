@@ -6,6 +6,7 @@ export const START_MAX_ZOOM = 4;
 export const ROW_HEIGHT = 70;
 export const ROW_TOP = 8;
 export const REVEAL_MS = 4000;
+export const SELECT_GRACE_MS = 8000;
 export const SOURCE_NAMES: Record<string, string> = { s1: "Sentinel-1", s2: "Sentinel-2" };
 export const TOAST_MS = 6000;
 export const WEEK_DAYS = 7;
