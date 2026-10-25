@@ -37,6 +37,8 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
             _, refreshed = S.sync_captures(s3, cfg.bucket, on_disk, cfg.mirror, cfg.captures_state_file)
         return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs), "captures_refreshed": refreshed}
     rows, dups = F.dedupe(B.read_rows(cfg.mirror, sorted(inputs)))
+    total = len(rows)
+    rows = F.visible(rows)
     if not rows:
         return {"result": "skipped_empty", "inputs": len(inputs), "build_id": live and live["build_id"]}
     if dups:
@@ -48,7 +50,7 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
     out = B.build(cfg, inputs, rows, missing)
     S.prune_captures(cfg.mirror, wanted)
     B.prune_builds(cfg)
-    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "missing_captures": len(missing)}
+    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "hidden_rejected": total - len(rows), "missing_captures": len(missing)}
 
 
 def run_once(cfg: Config, force: bool, offline: bool, trigger: str) -> dict:

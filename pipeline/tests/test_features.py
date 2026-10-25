@@ -22,6 +22,18 @@ def row(**over):
 
 
 class Features(unittest.TestCase):
+    def test_rejected_findings_are_hidden_and_the_others_stay(self):
+        rows = [row(finding_id=f"s1_1_{s}", qa_status=s) for s in ("confirmed", "rejected", "corrected", "unreviewed", None)]
+        self.assertEqual([r["finding_id"] for r in F.visible(rows)], ["s1_1_confirmed", "s1_1_corrected", "s1_1_unreviewed", "s1_1_None"])
+
+    def test_a_later_rejection_hides_a_pair_that_was_published_before(self):
+        old = row(qa_status="confirmed", _source_mtime=1)
+        new = row(qa_status="rejected", _source_mtime=2)
+        kept, _ = F.dedupe([old, new])
+        self.assertEqual(F.visible(kept), [])
+        kept, _ = F.dedupe([row(qa_status="rejected", _source_mtime=1), row(qa_status="corrected", _source_mtime=2)])
+        self.assertEqual(len(F.visible(kept)), 1)
+
     def test_input_hash_is_order_free_and_etag_sensitive(self):
         a = F.input_hash({"x": "1", "y": "2"})
         self.assertEqual(a, F.input_hash({"y": "2", "x": "1"}))

@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def input_hash(inputs: dict[str, str]) -> str:
@@ -49,6 +49,10 @@ def yaw(row: dict) -> float | None:
 
 def captures(rows: list[dict]) -> set[str]:
     return {row["capture_png"] for row in rows if row.get("capture_png")}
+
+
+def visible(rows: list[dict]) -> list[dict]:
+    return [row for row in rows if row.get("qa_status") != "rejected"]
 
 
 def dedupe(rows: list[dict]) -> tuple[list[dict], int]:
