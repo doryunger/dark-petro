@@ -1,5 +1,4 @@
-import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, setWorkerUrl, type LngLatBounds } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, type LngLatBounds } from "mapbox-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import hotSpots from "../data/hot_spots.json";
 import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM } from "../lib/constants";
@@ -8,13 +7,12 @@ import { tileUrl } from "../lib/filters";
 import { featureBounds, shouldFly, topCenter } from "../lib/geo";
 import { addPairImages } from "../lib/icons";
 import { HOT_SPOT_LINE, iconImage, pairsLayer, sortKey } from "../lib/layers";
-import { FALLBACK_STYLE, styleFor, transformRequest } from "../lib/mapbox";
+import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
 import type { Entry, Filter, Order, TileFeature } from "../lib/types";
 
-setWorkerUrl(workerUrl);
-
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const STYLE = import.meta.env.VITE_MAPBOX_STYLE;
 const ERROR_GAP_MS = 10000;
 
 export interface MapHandle {
@@ -51,8 +49,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
     if (!container.current) return undefined;
     const map = new Map({
       container: container.current,
-      style: styleFor(TOKEN),
-      transformRequest: transformRequest(TOKEN),
+      style: styleFor(TOKEN, STYLE),
+      accessToken: TOKEN,
+      projection: "mercator",
       center: [81, 13],
       zoom: 3,
       maxZoom: 18,
@@ -124,12 +123,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
     };
     map.on("mousemove", (e) => {
       if (!map.getLayer("pairs")) return;
-      const feature = map.queryRenderedFeatures(e.point, { layers: ["pairs"] })[0];
-      if (!feature) return hide();
+      const found = map.queryRenderedFeatures(e.point, { layers: ["pairs"] })[0];
+      if (!found) return hide();
       map.getCanvas().style.cursor = "pointer";
-      if (feature.properties.id === hoverId) return;
-      hoverId = feature.properties.id;
-      const tile = feature as unknown as TileFeature;
+      const tile = found as unknown as TileFeature;
+      if (tile.properties.id === hoverId) return;
+      hoverId = tile.properties.id;
       popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(toEntry(tile))).addTo(map);
     });
     map.on("mouseout", hide);

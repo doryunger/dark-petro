@@ -14,6 +14,7 @@ services:
       context: ${STS_BUILD_CONTEXT:-.}
       args:
         VITE_MAPBOX_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
+        VITE_MAPBOX_STYLE: ${MAPBOX_STYLE:-}
     container_name: sts-viewer
     command: ["serve"]
     mem_limit: 320m

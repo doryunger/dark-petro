@@ -1,4 +1,4 @@
-import type { ExpressionSpecification, LineLayerSpecification, SymbolLayerSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, LineLayerSpecification, SymbolLayerSpecification } from "mapbox-gl";
 import type { Order } from "./types";
 
 export const ICON_SIZE: ExpressionSpecification = ["interpolate", ["linear"], ["zoom"], 4, 0.3, 10, 0.5, 14, 0.8, 16, 1];

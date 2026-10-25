@@ -11,7 +11,7 @@ rsync -az --delete -e "ssh -i $KEY" --exclude __pycache__ --exclude node_modules
   "$ROOT/Dockerfile" "$ROOT/.dockerignore" "$ROOT/pipeline" "$ROOT/frontend" "$HOST:sts-viewer/src/"
 rsync -az -e "ssh -i $KEY" "$ROOT"/deploy/sts-tiles.service "$ROOT/deploy/sts-tiles.timer" "$ROOT/compose.yaml" "$HOST:sts-viewer/deploy/"
 
-"${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' MAPBOX_TOKEN='$MAPBOX_ACCESS_TOKEN' bash -s" <<'REMOTE'
+"${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' MAPBOX_TOKEN='$MAPBOX_ACCESS_TOKEN' MAPBOX_STYLE='${MAPBOX_STYLE:-}' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/sts-viewer
 APP_DIR="$PWD"
@@ -23,7 +23,7 @@ if [ ! -f .env ]; then
 fi
 grep -q '^STS_QUEUE_URL=' .env || echo "STS_QUEUE_URL=$QUEUE_URL" >> .env
 cp deploy/compose.yaml compose.yaml
-export STS_BUILD_CONTEXT=src MAPBOX_ACCESS_TOKEN="$MAPBOX_TOKEN" VIEWER_PORT
+export STS_BUILD_CONTEXT=src MAPBOX_ACCESS_TOKEN="$MAPBOX_TOKEN" MAPBOX_STYLE VIEWER_PORT
 sudo -E docker compose --profile ingest build viewer
 sudo docker run --rm --entrypoint python sts-tiles -m unittest discover -s tests -t .
 for unit in sts-tiles.service sts-tiles.timer; do

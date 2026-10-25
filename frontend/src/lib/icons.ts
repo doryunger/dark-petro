@@ -1,4 +1,4 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapboxMap } from "mapbox-gl";
 
 export interface PairStyle {
   fill: string;
@@ -50,7 +50,7 @@ export async function rasterPair(style: PairStyle, pixelRatio = 3): Promise<Imag
   return context.getImageData(0, 0, width, height);
 }
 
-export async function addPairImages(map: MapLibreMap, pixelRatio = 3): Promise<void> {
+export async function addPairImages(map: MapboxMap, pixelRatio = 3): Promise<void> {
   for (const [name, style] of Object.entries(PAIR_IMAGES)) {
     if (map.hasImage(name)) continue;
     map.addImage(name, await rasterPair(style, pixelRatio), { pixelRatio });

@@ -4,7 +4,8 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 ARG VITE_MAPBOX_TOKEN=""
-ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
+ARG VITE_MAPBOX_STYLE=""
+ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN VITE_MAPBOX_STYLE=$VITE_MAPBOX_STYLE
 RUN npm run typecheck && npm test && npm run build
 
 FROM python:3.12-slim
