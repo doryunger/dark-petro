@@ -1,7 +1,7 @@
 __pycache__/
 node_modules/
 .env
-data/
+/data/
 deploy/deploy.env
 frontend/.env.local
 frontend/dist/
