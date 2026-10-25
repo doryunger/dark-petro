@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import hotSpots from "../data/hot_spots.json";
-import { featureBounds, topCenter } from "./geo.js";
+import { featureBounds, shouldFly, topCenter } from "./geo.js";
 
 describe("geo", () => {
+  it("flies from the reel up to zoom 13 and from the map up to zoom 12, fractional zoom included", () => {
+    expect(shouldFly(13, false)).toBe(true);
+    expect(shouldFly(13.01, false)).toBe(false);
+    expect(shouldFly(12, true)).toBe(true);
+    expect(shouldFly(12.01, true)).toBe(false);
+    expect(shouldFly(13, true)).toBe(false);
+  });
+
   it("covers the four hot spots", () => {
     expect(hotSpots.features.map((f) => f.properties.name).sort()).toEqual(["fujairah_outer", "johor_east_scs", "malaysia_eopl", "off_sohar"]);
     expect(featureBounds(hotSpots)).toEqual([[56.3, 0.8], [106, 25.8]]);

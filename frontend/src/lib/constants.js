@@ -1,5 +1,6 @@
 export const QUERY_ZOOM = 13;
 export const FLY_ZOOM = 15;
+export const MAP_CLICK_FLY_ZOOM = 12;
 export const MAX_TILE_ZOOM = 14;
 export const START_MAX_ZOOM = 4;
 export const ROW_HEIGHT = 70;

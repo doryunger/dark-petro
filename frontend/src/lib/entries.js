@@ -4,7 +4,7 @@ import { SOURCE_NAMES } from "./constants.js";
 const LABELS = Object.fromEntries(hotSpots.features.map((f) => [f.properties.name, f.properties.label]));
 
 export function shortId(id) {
-  return id.split("_").slice(2).join("_");
+  return id.split("_").slice(2).join("_").replace(/^w\d+-/, "");
 }
 
 export function sourceName(code) {
@@ -34,6 +34,7 @@ export function toEntry(feature) {
       flag: p[`v${n}_flag`] ?? null,
       imo: p[`v${n}_imo`] ?? null,
       sanctioned: p[`v${n}_sanctioned`] === true,
+      known: p[`v${n}_name`] != null,
     })),
   };
 }

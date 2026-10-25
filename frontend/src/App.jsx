@@ -47,7 +47,7 @@ export default function App() {
 
   const select = useCallback((entry, fromMap) => {
     setSelected(entry);
-    mapRef.current?.flyTo(entry);
+    mapRef.current?.flyTo(entry, fromMap);
     if (fromMap) requestAnimationFrame(() => reelRef.current?.reveal(entry.id));
   }, []);
 

@@ -10,6 +10,7 @@ describe("entries", () => {
   it("shows everything after the second underscore as the ID", () => {
     expect(shortId("s2_20261021T065238_56045-272349")).toBe("56045-272349");
     expect(shortId("s1_20261021T021407_a_b-1")).toBe("a_b-1");
+    expect(shortId("s1_20261022T224733_w0-33113-13846")).toBe("33113-13846");
   });
 
   it("names the hot spots and the sources", () => {
@@ -21,8 +22,8 @@ describe("entries", () => {
   it("reads a tile feature, leaving out what the tile leaves out", () => {
     const e = toEntry(feature("s2_20261021T065238_56045-272349"));
     expect(e).toMatchObject({ shortId: "56045-272349", date: "2026-10-21", hotSpot: "off_sohar", source: "s2", sanctioned: true, image: "captures/a.png", lon: 57.5973, lat: 24.6244 });
-    expect(e.vessels[0]).toEqual({ name: "ONE", flag: "PA", imo: "9123456", sanctioned: false });
-    expect(e.vessels[1]).toEqual({ name: null, flag: "KM", imo: null, sanctioned: true });
+    expect(e.vessels[0]).toEqual({ name: "ONE", flag: "PA", imo: "9123456", sanctioned: false, known: true });
+    expect(e.vessels[1]).toEqual({ name: null, flag: "KM", imo: null, sanctioned: true, known: false });
   });
 
   it("takes the exact position from the attributes, and the tile geometry only when they are missing", () => {

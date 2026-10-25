@@ -190,18 +190,6 @@ body {
   accent-color: #f2c230;
 }
 
-.filter-button {
-  margin-left: auto;
-  padding: 6px 18px;
-  border: 0;
-  border-radius: 6px;
-  background: #f2c230;
-  color: #16252f;
-  font: inherit;
-  font-weight: 500;
-  cursor: pointer;
-}
-
 .reel {
   grid-column: 1;
   grid-row: 3;
@@ -496,6 +484,29 @@ body {
   gap: 4px 8px;
   min-width: 0;
   color: #ffffff;
+}
+
+.vessel-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #1b2a35;
+  box-sizing: border-box;
+  color: #1b2a35;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.vessel-marker-known {
+  background: #f2c230;
+}
+
+.vessel-marker-unknown {
+  background: #ffffff;
 }
 
 .detail-flag {

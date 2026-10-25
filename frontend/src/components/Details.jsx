@@ -5,10 +5,12 @@ import { hotSpotLabel, sourceName } from "../lib/entries.js";
 function Vessel({ number, vessel }) {
   return (
     <div className="detail-row">
-      <span className="detail-label">Vessel {number}</span>
+      <span className="detail-label">
+        <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
+      </span>
       <span className="detail-value">
-        {vessel.name ?? "Unknown vessel"}
-        {vessel.flag && <span className="detail-flag">{vessel.flag}</span>}
+        {vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
+        {vessel.flag && <span className="detail-flag">({vessel.flag})</span>}
         {vessel.sanctioned && <span className="detail-badge">Sanctioned</span>}
         {vessel.imo && <span className="detail-imo">IMO {vessel.imo}</span>}
       </span>

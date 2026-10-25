@@ -5,7 +5,7 @@ import hotSpots from "../data/hot_spots.json";
 import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM } from "../lib/constants.js";
 import { toEntry, uniqueEntries } from "../lib/entries.js";
 import { tileUrl } from "../lib/filters.js";
-import { featureBounds, topCenter } from "../lib/geo.js";
+import { featureBounds, shouldFly, topCenter } from "../lib/geo.js";
 import { addPairImages } from "../lib/icons.js";
 import { HOT_SPOT_LINE, iconImage, pairsLayer, sortKey } from "../lib/layers.js";
 import { FALLBACK_STYLE, styleFor, transformRequest } from "../lib/mapbox.js";
@@ -25,9 +25,9 @@ const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelec
   latest.current = { filter, order, selectedId, onSelect, onEntries, onError };
 
   useImperativeHandle(ref, () => ({
-    flyTo(entry) {
+    flyTo(entry, fromMap) {
       const map = mapRef.current;
-      if (!map || map.getZoom() > QUERY_ZOOM) return;
+      if (!map || !shouldFly(map.getZoom(), fromMap)) return;
       map.flyTo({ center: [entry.lon, entry.lat], zoom: FLY_ZOOM, essential: true });
     },
   }), []);

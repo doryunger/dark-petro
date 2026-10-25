@@ -1,3 +1,9 @@
+import { MAP_CLICK_FLY_ZOOM, QUERY_ZOOM } from "./constants.js";
+
+export function shouldFly(zoom, fromMap) {
+  return zoom <= (fromMap ? MAP_CLICK_FLY_ZOOM : QUERY_ZOOM);
+}
+
 export function featureBounds(collection) {
   let west = Infinity;
   let south = Infinity;
