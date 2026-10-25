@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { fromDayIndex, sliderRange } from "../lib/dates.js";
-import { sourceName } from "../lib/entries.js";
-import RangeSlider from "./RangeSlider.jsx";
+import { fromDayIndex, sliderRange } from "../lib/dates";
+import { sourceName } from "../lib/entries";
+import type { Filter, Meta } from "../lib/types";
+import RangeSlider from "./RangeSlider";
 
 const APPLY_DELAY_MS = 300;
 
-export default function Filters({ meta, applied, onApply }) {
-  const [range, setRange] = useState(() => sliderRange(applied, meta.min_date, meta.max_date));
+interface Props {
+  meta: Meta;
+  applied: Filter;
+  onApply: (next: Filter) => void;
+}
+
+export default function Filters({ meta, applied, onApply }: Props) {
+  const [range, setRange] = useState<[number, number]>(() => sliderRange(applied, meta.min_date, meta.max_date));
   const [sources, setSources] = useState(applied.sources);
 
   const latest = useRef({ applied, onApply });
@@ -25,7 +32,7 @@ export default function Filters({ meta, applied, onApply }) {
     return () => clearTimeout(timer);
   }, [range, sources]);
 
-  const toggle = (code) => {
+  const toggle = (code: string) => {
     setSources((current) => {
       if (!current.includes(code)) return [...current, code];
       return current.length === 1 ? current : current.filter((c) => c !== code);

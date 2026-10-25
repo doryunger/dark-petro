@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, clamp, dayIndex, defaultFilter, formatDate, formatTime, fromDayIndex, sliderRange, todayUtc } from "./dates.js";
+import { addDays, clamp, dayIndex, defaultFilter, formatDate, formatTime, fromDayIndex, sliderRange, todayUtc } from "./dates";
 
 describe("dates", () => {
   it("takes today in UTC, not in the local zone", () => {

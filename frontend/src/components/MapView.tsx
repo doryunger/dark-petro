@@ -1,38 +1,54 @@
-import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, setWorkerUrl } from "maplibre-gl";
+import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, setWorkerUrl, type LngLatBounds } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import hotSpots from "../data/hot_spots.json";
-import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM } from "../lib/constants.js";
-import { toEntry, uniqueEntries } from "../lib/entries.js";
-import { tileUrl } from "../lib/filters.js";
-import { featureBounds, shouldFly, topCenter } from "../lib/geo.js";
-import { addPairImages } from "../lib/icons.js";
-import { HOT_SPOT_LINE, iconImage, pairsLayer, sortKey } from "../lib/layers.js";
-import { FALLBACK_STYLE, styleFor, transformRequest } from "../lib/mapbox.js";
-import { entryCard } from "../lib/popup.js";
+import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM } from "../lib/constants";
+import { toEntry, uniqueEntries } from "../lib/entries";
+import { tileUrl } from "../lib/filters";
+import { featureBounds, shouldFly, topCenter } from "../lib/geo";
+import { addPairImages } from "../lib/icons";
+import { HOT_SPOT_LINE, iconImage, pairsLayer, sortKey } from "../lib/layers";
+import { FALLBACK_STYLE, styleFor, transformRequest } from "../lib/mapbox";
+import { entryCard } from "../lib/popup";
+import type { Entry, Filter, Order, TileFeature } from "../lib/types";
 
 setWorkerUrl(workerUrl);
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const ERROR_GAP_MS = 10000;
 
-const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelect, onEntries, onError, children }, ref) {
-  const container = useRef(null);
-  const mapRef = useRef(null);
-  const queryBounds = useRef(null);
-  const latest = useRef({});
+export interface MapHandle {
+  flyTo(entry: Entry): void;
+}
+
+interface Props {
+  filter: Filter;
+  order: Order;
+  selectedId: string | null;
+  onSelect: (entry: Entry) => void;
+  onEntries: (entries: Entry[]) => void;
+  onError: (message: string) => void;
+  children?: ReactNode;
+}
+
+const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, selectedId, onSelect, onEntries, onError, children }, ref) {
+  const container = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<Map | null>(null);
+  const queryBounds = useRef<LngLatBounds | null>(null);
+  const latest = useRef({ filter, order, selectedId, onSelect, onEntries, onError });
   const [showBack, setShowBack] = useState(false);
   latest.current = { filter, order, selectedId, onSelect, onEntries, onError };
 
   useImperativeHandle(ref, () => ({
-    flyTo(entry, fromMap) {
+    flyTo(entry) {
       const map = mapRef.current;
-      if (!map || !shouldFly(map.getZoom(), fromMap)) return;
+      if (!map || !shouldFly(map.getZoom())) return;
       map.flyTo({ center: [entry.lon, entry.lat], zoom: FLY_ZOOM, essential: true });
     },
   }), []);
 
   useEffect(() => {
+    if (!container.current) return undefined;
     const map = new Map({
       container: container.current,
       style: styleFor(TOKEN),
@@ -76,7 +92,7 @@ const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelec
     let frame = 0;
     const refresh = () => {
       if (!map.getLayer("pairs")) return;
-      const entries = uniqueEntries(map.queryRenderedFeatures({ layers: ["pairs"] }));
+      const entries = uniqueEntries(map.queryRenderedFeatures({ layers: ["pairs"] }) as unknown as TileFeature[]);
       const next = entries.map((e) => e.id).sort().join("|");
       if (next === signature) return;
       signature = next;
@@ -100,7 +116,7 @@ const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelec
     queryBounds.current = map.getBounds();
 
     const popup = new Popup({ closeButton: false, closeOnClick: false, closeOnMove: false, offset: 14, anchor: "bottom", maxWidth: "none" });
-    let hoverId = null;
+    let hoverId: string | null = null;
     const hide = () => {
       hoverId = null;
       map.getCanvas().style.cursor = "";
@@ -113,20 +129,21 @@ const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelec
       map.getCanvas().style.cursor = "pointer";
       if (feature.properties.id === hoverId) return;
       hoverId = feature.properties.id;
-      popup.setLngLat(feature.geometry.coordinates).setDOMContent(entryCard(toEntry(feature))).addTo(map);
+      const tile = feature as unknown as TileFeature;
+      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(toEntry(tile))).addTo(map);
     });
     map.on("mouseout", hide);
     map.on("click", (e) => {
       if (!map.getLayer("pairs")) return;
       const feature = map.queryRenderedFeatures(e.point, { layers: ["pairs"] })[0];
-      if (feature) latest.current.onSelect(toEntry(feature));
+      if (feature) latest.current.onSelect(toEntry(feature as unknown as TileFeature));
     });
 
     let lastError = 0;
     let fellBack = false;
     map.on("error", (e) => {
       const now = Date.now();
-      if (e.sourceId === "pairs") {
+      if ((e as { sourceId?: string }).sourceId === "pairs") {
         if (now - lastError > ERROR_GAP_MS) latest.current.onError("Could not load the map data. Check the connection and try again.");
         lastError = now;
       } else if (TOKEN && !fellBack && !map.isStyleLoaded()) {
@@ -146,8 +163,8 @@ const MapView = forwardRef(function MapView({ filter, order, selectedId, onSelec
   }, []);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource("pairs");
-    if (source) source.setTiles([tileUrl(window.location.origin, filter)]);
+    const source = mapRef.current?.getSource("pairs") as { setTiles?: (tiles: string[]) => void } | undefined;
+    if (source?.setTiles) source.setTiles([tileUrl(window.location.origin, filter)]);
   }, [filter]);
 
   useEffect(() => {

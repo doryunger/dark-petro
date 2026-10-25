@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { formatDate, formatTime } from "../lib/dates.js";
-import { hotSpotLabel, sourceName } from "../lib/entries.js";
+import { formatDate, formatTime } from "../lib/dates";
+import { hotSpotLabel, sourceName } from "../lib/entries";
+import type { Entry, Vessel as VesselData } from "../lib/types";
 
-function Vessel({ number, vessel }) {
+function Vessel({ number, vessel }: { number: number; vessel: VesselData }) {
   return (
     <div className="detail-row">
       <span className="detail-label">
@@ -18,7 +19,7 @@ function Vessel({ number, vessel }) {
   );
 }
 
-function Row({ label, value }) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="detail-row">
       <span className="detail-label">{label}</span>
@@ -27,7 +28,7 @@ function Row({ label, value }) {
   );
 }
 
-function Capture({ image }) {
+function Capture({ image }: { image: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!image || failed) return <div className="details-image">Image not available</div>;
   return (
@@ -37,7 +38,7 @@ function Capture({ image }) {
   );
 }
 
-export default function Details({ entry, onClose }) {
+export default function Details({ entry, onClose }: { entry: Entry | null; onClose: () => void }) {
   if (!entry) return <section className="details" />;
   return (
     <section className="details">

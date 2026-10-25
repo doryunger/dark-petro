@@ -1,15 +1,18 @@
-export const ICON_SIZE = ["interpolate", ["linear"], ["zoom"], 4, 0.3, 10, 0.5, 14, 0.8, 16, 1];
+import type { ExpressionSpecification, LineLayerSpecification, SymbolLayerSpecification } from "maplibre-gl";
+import type { Order } from "./types";
 
-export function iconImage(selectedId) {
+export const ICON_SIZE: ExpressionSpecification = ["interpolate", ["linear"], ["zoom"], 4, 0.3, 10, 0.5, 14, 0.8, 16, 1];
+
+export function iconImage(selectedId: string | null | undefined): ExpressionSpecification {
   return ["case", ["==", ["get", "id"], selectedId ?? ""], "pair-selected", ["==", ["get", "sanctioned"], true], "pair-sanctioned", "pair"];
 }
 
-export function sortKey(order, selectedId) {
+export function sortKey(order: Order, selectedId: string | null | undefined): ExpressionSpecification {
   const sign = order === "oldest" ? -1 : 1;
   return ["case", ["==", ["get", "id"], selectedId ?? ""], 1e13, ["*", sign, ["get", "t"]]];
 }
 
-export function pairsLayer({ order, selectedId }) {
+export function pairsLayer({ order, selectedId }: { order: Order; selectedId: string | null | undefined }): SymbolLayerSpecification {
   return {
     id: "pairs",
     type: "symbol",
@@ -28,7 +31,7 @@ export function pairsLayer({ order, selectedId }) {
   };
 }
 
-export const HOT_SPOT_LINE = {
+export const HOT_SPOT_LINE: LineLayerSpecification = {
   id: "hot-spots",
   type: "line",
   source: "hot-spots",

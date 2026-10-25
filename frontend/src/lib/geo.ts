@@ -1,10 +1,11 @@
-import { MAP_CLICK_FLY_ZOOM, QUERY_ZOOM } from "./constants.js";
+import { FLY_BELOW_ZOOM } from "./constants";
+import type { Bounds, HotSpotCollection, HotSpotFeature, LngLat } from "./types";
 
-export function shouldFly(zoom, fromMap) {
-  return zoom <= (fromMap ? MAP_CLICK_FLY_ZOOM : QUERY_ZOOM);
+export function shouldFly(zoom: number): boolean {
+  return zoom < FLY_BELOW_ZOOM;
 }
 
-export function featureBounds(collection) {
+export function featureBounds(collection: HotSpotCollection): Bounds {
   let west = Infinity;
   let south = Infinity;
   let east = -Infinity;
@@ -22,7 +23,7 @@ export function featureBounds(collection) {
   return [[west, south], [east, north]];
 }
 
-export function topCenter(feature) {
+export function topCenter(feature: HotSpotFeature): LngLat {
   const ring = feature.geometry.coordinates[0];
   const lons = ring.map(([lon]) => lon);
   const lats = ring.map(([, lat]) => lat);

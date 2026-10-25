@@ -1,7 +1,15 @@
-import { formatDate } from "../lib/dates.js";
-import { hotSpotLabel } from "../lib/entries.js";
+import { formatDate } from "../lib/dates";
+import { hotSpotLabel } from "../lib/entries";
+import type { Entry } from "../lib/types";
 
-export default function EntryCard({ entry, selected, top, onSelect }) {
+interface Props {
+  entry: Entry;
+  selected: boolean;
+  top: number;
+  onSelect: (entry: Entry) => void;
+}
+
+export default function EntryCard({ entry, selected, top, onSelect }: Props) {
   return (
     <article
       className={`entry${selected ? " entry-selected" : ""}`}

@@ -1,14 +1,15 @@
-import { formatDate } from "./dates.js";
-import { hotSpotLabel } from "./entries.js";
+import { formatDate } from "./dates";
+import { hotSpotLabel } from "./entries";
+import type { Entry } from "./types";
 
-function element(tag, className, text) {
+function element(tag: string, className: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
   node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
 }
 
-export function entryCard(entry) {
+export function entryCard(entry: Entry): HTMLElement {
   const card = element("article", "entry");
   card.append(element("span", `entry-icon${entry.sanctioned ? " entry-icon-sanctioned" : ""}`));
   card.append(element("div", "entry-id", entry.shortId));

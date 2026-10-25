@@ -1,0 +1,66 @@
+export type Order = "latest" | "oldest";
+
+export interface Meta {
+  min_date: string;
+  max_date: string;
+  sources: string[];
+}
+
+export interface Filter {
+  from: string;
+  to: string;
+  sources: string[];
+}
+
+export interface Vessel {
+  name: string | null;
+  flag: string | null;
+  imo: string | null;
+  sanctioned: boolean;
+  known: boolean;
+}
+
+export interface Entry {
+  id: string;
+  shortId: string;
+  date: string;
+  t: number;
+  hotSpot: string;
+  source: string;
+  sanctioned: boolean;
+  image: string | null;
+  lon: number;
+  lat: number;
+  vessels: [Vessel, Vessel];
+}
+
+export interface TileProperties {
+  id: string;
+  date: string;
+  t: number;
+  hot_spot: string;
+  source: string;
+  sanctioned?: boolean;
+  image?: string;
+  lon?: number;
+  lat?: number;
+  yaw?: number;
+  [vessel: string]: string | number | boolean | undefined;
+}
+
+export interface TileFeature {
+  properties: TileProperties;
+  geometry: { coordinates: number[] };
+}
+
+export interface HotSpotFeature {
+  properties: { name: string; label: string };
+  geometry: { coordinates: number[][][] };
+}
+
+export interface HotSpotCollection {
+  features: HotSpotFeature[];
+}
+
+export type LngLat = [number, number];
+export type Bounds = [LngLat, LngLat];

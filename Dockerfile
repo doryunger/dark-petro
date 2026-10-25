@@ -5,7 +5,7 @@ RUN npm ci
 COPY frontend/ ./
 ARG VITE_MAPBOX_TOKEN=""
 ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
-RUN npm test && npm run build
+RUN npm run typecheck && npm test && npm run build
 
 FROM python:3.12-slim
 WORKDIR /app

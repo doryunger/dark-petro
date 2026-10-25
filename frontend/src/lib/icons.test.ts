@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAIR_IMAGES, pairSvg } from "./icons.js";
+import { PAIR_IMAGES, pairSvg } from "./icons";
 
 describe("icons", () => {
   it("draws two hulls with the given fill and outline, turned to point south", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HOT_SPOT_LINE, ICON_SIZE, iconImage, pairsLayer, sortKey } from "./layers.js";
+import { HOT_SPOT_LINE, ICON_SIZE, iconImage, pairsLayer, sortKey } from "./layers";
 
 describe("layers", () => {
   it("picks the cyan image for the selected pair, then red for sanctioned, then yellow", () => {
@@ -14,7 +14,7 @@ describe("layers", () => {
   });
 
   it("shows every icon, rotated by the yaw measured from the north", () => {
-    const { layout, source, "source-layer": sourceLayer } = pairsLayer({ order: "latest", selectedId: null });
+    const { layout = {}, source, "source-layer": sourceLayer } = pairsLayer({ order: "latest", selectedId: null });
     expect(layout["icon-allow-overlap"]).toBe(true);
     expect(layout["icon-ignore-placement"]).toBe(true);
     expect(layout["icon-rotation-alignment"]).toBe("map");

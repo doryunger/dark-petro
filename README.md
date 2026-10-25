@@ -35,7 +35,7 @@ Files published to the web carry no internal provenance (job, attempt, review fo
 ## Viewer (`frontend/`, `pipeline/sts_tiles/serve.py`)
 
 ```
-cd frontend && npm ci && npm test
+cd frontend && npm ci && npm run typecheck && npm test
 cd ../pipeline && python3 -m unittest discover -s tests -t .
 ```
 

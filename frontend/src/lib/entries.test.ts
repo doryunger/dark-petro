@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries.js";
+import { hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import type { Entry, TileFeature } from "./types";
 
-const feature = (id, extra = {}) => ({
+const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
   geometry: { coordinates: [57.6, 24.62] },
   properties: { id, lon: 57.5973, lat: 24.6244, date: "2026-10-21", t: 1792565558, hot_spot: "off_sohar", source: "s2", sanctioned: true, image: "captures/a.png", yaw: 192.4, v1_name: "ONE", v1_flag: "PA", v1_imo: "9123456", v1_sanctioned: false, v2_flag: "KM", v2_sanctioned: true, ...extra },
 });
@@ -39,7 +40,7 @@ describe("entries", () => {
   });
 
   it("sorts newest first or oldest first, and by id on equal times", () => {
-    const list = [{ id: "b", t: 5 }, { id: "a", t: 5 }, { id: "c", t: 9 }, { id: "d", t: 1 }];
+    const list = [{ id: "b", t: 5 }, { id: "a", t: 5 }, { id: "c", t: 9 }, { id: "d", t: 1 }] as Entry[];
     expect(sortEntries(list, "latest").map((e) => e.id)).toEqual(["c", "a", "b", "d"]);
     expect(sortEntries(list, "oldest").map((e) => e.id)).toEqual(["d", "a", "b", "c"]);
     expect(list.map((e) => e.id)).toEqual(["b", "a", "c", "d"]);

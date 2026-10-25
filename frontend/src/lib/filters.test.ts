@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matches, tileUrl } from "./filters.js";
+import { matches, tileUrl } from "./filters";
 
 const filter = { from: "2026-10-17", to: "2026-10-24", sources: ["s2", "s1"] };
 

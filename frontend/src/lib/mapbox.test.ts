@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FALLBACK_STYLE, mapboxUrl, styleFor, transformRequest } from "./mapbox.js";
+import { FALLBACK_STYLE, mapboxUrl, styleFor, transformRequest } from "./mapbox";
 
 const T = "pk.test";
 

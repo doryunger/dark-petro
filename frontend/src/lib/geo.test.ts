@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import hotSpots from "../data/hot_spots.json";
-import { featureBounds, shouldFly, topCenter } from "./geo.js";
+import { featureBounds, shouldFly, topCenter } from "./geo";
 
 describe("geo", () => {
-  it("flies from the reel up to zoom 13 and from the map up to zoom 12, fractional zoom included", () => {
-    expect(shouldFly(13, false)).toBe(true);
-    expect(shouldFly(13.01, false)).toBe(false);
-    expect(shouldFly(12, true)).toBe(true);
-    expect(shouldFly(12.01, true)).toBe(false);
-    expect(shouldFly(13, true)).toBe(false);
+  it("flies only below zoom 12, fractional zoom included", () => {
+    expect(shouldFly(11.99)).toBe(true);
+    expect(shouldFly(12)).toBe(false);
+    expect(shouldFly(13)).toBe(false);
   });
 
   it("covers the four hot spots", () => {
@@ -18,7 +16,7 @@ describe("geo", () => {
 
   it("puts a label at the top centre of an area", () => {
     const sohar = hotSpots.features.find((f) => f.properties.name === "off_sohar");
-    const [lon, lat] = topCenter(sohar);
+    const [lon, lat] = topCenter(sohar!);
     expect(lon).toBeCloseTo(57.1, 6);
     expect(lat).toBe(24.9);
   });

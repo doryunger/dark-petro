@@ -1,11 +1,19 @@
-import { dayIndex, formatDate, fromDayIndex } from "../lib/dates.js";
+import type { CSSProperties } from "react";
+import { dayIndex, formatDate, fromDayIndex } from "../lib/dates";
 
-export default function RangeSlider({ min, max, value, onChange }) {
+interface Props {
+  min: string;
+  max: string;
+  value: [number, number];
+  onChange: (next: [number, number]) => void;
+}
+
+export default function RangeSlider({ min, max, value, onChange }: Props) {
   const low = dayIndex(min);
   const high = dayIndex(max);
   const span = Math.max(high - low, 1);
   const [start, end] = value;
-  const style = { "--start": (start - low) / span, "--end": (end - low) / span };
+  const style = { "--start": (start - low) / span, "--end": (end - low) / span } as CSSProperties;
   return (
     <div className="range">
       <div className="range-limits">

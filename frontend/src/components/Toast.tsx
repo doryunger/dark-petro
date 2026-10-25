@@ -1,7 +1,12 @@
 import { useEffect } from "react";
-import { TOAST_MS } from "../lib/constants.js";
+import { TOAST_MS } from "../lib/constants";
 
-export default function Toast({ message, onClose }) {
+interface Props {
+  message: string | null;
+  onClose: () => void;
+}
+
+export default function Toast({ message, onClose }: Props) {
   useEffect(() => {
     if (!message) return undefined;
     const timer = setTimeout(onClose, TOAST_MS);
