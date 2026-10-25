@@ -16,7 +16,7 @@ Runs on every S3 publish (an SQS event reaches `sts-tiles-listener`) and hourly 
 1. List `sts/**.parquet` in the bucket. Download every key whose ETag changed since the last run into `data/mirror/`, drop
    keys gone from S3 (`data/state.json` holds key to ETag). The worker rewrites these files in place, so a changed ETag is
    the only delta signal.
-2. If the hash of all (key, ETag) pairs and the schema version equals the live build's `input_hash`, stop.
+2. If the hash of all mirrored files' contents and the schema version equals the live build's `input_hash`, stop.
 3. Otherwise read all rows (DuckDB), dedupe on `finding_id`, mirror the PNGs they reference, and write one public-safe
    `findings.parquet` in a new `data/builds/<stamp>-<hash>/`.
 4. Swap `data/current` to the new build in one rename; keep the last 5 builds.
@@ -26,7 +26,7 @@ Output under the server's `sts-viewer/data/`:
 | Path | What |
 |---|---|
 | `current/findings.parquet` | One row per finding, internal columns removed |
-| `current/manifest.json` | Build id, inputs and ETags, counts per hot spot / source / QA status, time range, bounds |
+| `current/manifest.json` | Build id, inputs and their SHA-256, counts per hot spot / source / QA status, time range, bounds |
 | `mirror/captures/...` | The capture PNGs, at their S3 keys |
 | `status.json` | Result of the last run (`built`, `up_to_date`, `skipped_empty`, `failed`) |
 
@@ -39,9 +39,14 @@ cd frontend && npm ci && npm test
 cd ../pipeline && python3 -m unittest discover -s tests -t .
 ```
 
-For local work, run the service on a data directory with a `current/` build (`STS_DATA_DIR=... STS_PORT=8090 python -m sts_tiles serve`)
-and `npm run dev` in `frontend/`. The Mapbox token goes in `frontend/.env.local` (see `frontend/.env.example`). The service
-needs DuckDB's spatial extension (`INSTALL spatial` once, or `STS_DUCKDB_EXTENSIONS` pointing at an installed copy).
+One image (`Dockerfile` at the root) holds the pipeline, the tile service and the built app, so it behaves the same on a laptop and on the server. The build runs the frontend tests and the app build in its first stage and the Python tests are run against the image by `deploy.sh`.
+
+```
+docker compose build
+STS_DATA_DIR=/path/to/data docker compose up viewer
+```
+
+The data directory needs a `current/` build. Put `MAPBOX_ACCESS_TOKEN` (a public `pk.` token) and `VIEWER_PORT` in the environment or a git-ignored `.env`; the viewer is at `http://127.0.0.1:$VIEWER_PORT`. For work on the app itself, run the service and `npm run dev` in `frontend/` (token in `frontend/.env.local`, see `frontend/.env.example`).
 
 ## Deploying
 
@@ -51,8 +56,7 @@ cp deploy/deploy.env.example deploy/deploy.env
 cd pipeline && python3 -m unittest discover -s tests -t .
 ```
 
-`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` builds the app here, copies the pipeline and the app over, builds the
-image, runs the tests inside it, installs the systemd units (the listener, the timer and the viewer) and runs the pipeline once. The proxy
+`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` copies the sources over, builds the image there (the app is built inside it), runs the Python tests in it, starts the viewer and the listener with `docker compose`, installs the hourly systemd timer and runs the pipeline once. The proxy
 on the server has to forward the viewer's address to the viewer's loopback port; that config lives on the server, outside this repo. The server's `.env` holds only the
 AWS read keys, region, `STS_BUCKET` and `STS_QUEUE_URL`.
 

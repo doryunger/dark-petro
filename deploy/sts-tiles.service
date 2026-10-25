@@ -5,5 +5,6 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker run --rm --name sts-tiles --user 1000:1000 --memory 400m --env-file @APP_DIR@/.env -v @APP_DIR@/data:/data sts-tiles run
+WorkingDirectory=@APP_DIR@
+ExecStart=/usr/bin/docker compose --profile ingest run --rm sync
 TimeoutStartSec=600
