@@ -6,12 +6,19 @@ set -a
 set +a
 SSH=(ssh -i "$KEY" "$HOST")
 
-"${SSH[@]}" mkdir -p sts-viewer/src sts-viewer/deploy
-rsync -az --delete -e "ssh -i $KEY" --exclude __pycache__ --exclude node_modules --exclude dist --exclude '.env*' \
-  "$ROOT/Dockerfile" "$ROOT/.dockerignore" "$ROOT/pipeline" "$ROOT/frontend" "$HOST:sts-viewer/src/"
-rsync -az -e "ssh -i $KEY" "$ROOT"/deploy/sts-tiles.service "$ROOT/deploy/sts-tiles.timer" "$ROOT/compose.yaml" "$HOST:sts-viewer/deploy/"
+RUN=(env)
+docker info >/dev/null 2>&1 || RUN=(sudo env)
 
-"${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' MAPBOX_TOKEN='$MAPBOX_ACCESS_TOKEN' MAPBOX_STYLE='${MAPBOX_STYLE:-}' bash -s" <<'REMOTE'
+cd "$ROOT"
+"${RUN[@]}" MAPBOX_ACCESS_TOKEN="$MAPBOX_ACCESS_TOKEN" MAPBOX_STYLE="${MAPBOX_STYLE:-}" VIEWER_PORT="$VIEWER_PORT" docker compose build viewer
+"${RUN[@]}" docker run --rm --entrypoint python sts-tiles -m unittest discover -s tests -t .
+
+"${SSH[@]}" mkdir -p sts-viewer/deploy
+"${RUN[@]}" docker save sts-tiles | gzip | "${SSH[@]}" 'gunzip | sudo docker load'
+rsync -az -e "ssh -i $KEY" "$ROOT"/deploy/sts-tiles.service "$ROOT/deploy/sts-tiles.timer" "$HOST:sts-viewer/deploy/"
+rsync -az -e "ssh -i $KEY" "$ROOT/compose.yaml" "$HOST:sts-viewer/compose.yaml"
+
+"${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' bash -s" <<'REMOTE'
 set -euo pipefail
 cd ~/sts-viewer
 APP_DIR="$PWD"
@@ -22,18 +29,18 @@ if [ ! -f .env ]; then
   sed -n 's/^S3_BUCKET_NAME=/STS_BUCKET=/p' "$CREDENTIALS_SOURCE" >> .env
 fi
 grep -q '^STS_QUEUE_URL=' .env || echo "STS_QUEUE_URL=$QUEUE_URL" >> .env
-cp deploy/compose.yaml compose.yaml
-export STS_BUILD_CONTEXT=src MAPBOX_ACCESS_TOKEN="$MAPBOX_TOKEN" MAPBOX_STYLE VIEWER_PORT
-sudo -E docker compose --profile ingest build viewer
-sudo docker run --rm --entrypoint python sts-tiles -m unittest discover -s tests -t .
 for unit in sts-tiles.service sts-tiles.timer; do
   sed "s#@APP_DIR@#$APP_DIR#g" "deploy/$unit" | sudo tee "/etc/systemd/system/$unit" > /dev/null
 done
-sudo systemctl disable --now sts-tiles-listener.service sts-viewer.service 2>/dev/null || true
-sudo rm -f /etc/systemd/system/sts-tiles-listener.service /etc/systemd/system/sts-viewer.service
+for unit in sts-tiles-listener.service sts-viewer.service; do
+  sudo systemctl disable --now "$unit" 2>/dev/null || true
+  sudo systemctl stop "$unit" 2>/dev/null || true
+  sudo rm -f "/etc/systemd/system/$unit"
+done
 sudo systemctl daemon-reload
+sudo docker rm -f sts-tiles-listener sts-viewer sts-tiles-watch >/dev/null 2>&1 || true
 sudo systemctl enable --now sts-tiles.timer
-sudo -E docker compose --profile ingest up -d --remove-orphans viewer watch listener
+sudo env VIEWER_PORT="$VIEWER_PORT" docker compose --profile ingest up -d --no-build --remove-orphans viewer watch listener
 sudo systemctl start sts-tiles.service
 sleep 5
 curl -fsS "http://127.0.0.1:$VIEWER_PORT/metadata"
