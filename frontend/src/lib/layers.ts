@@ -18,6 +18,8 @@ export function pairsLayer({ order, selectedId }: { order: Order; selectedId: st
     type: "symbol",
     source: "pairs",
     "source-layer": "pairs",
+    slot: "top",
+    paint: { "icon-emissive-strength": 1 },
     layout: {
       "icon-image": iconImage(selectedId),
       "icon-size": ICON_SIZE,
@@ -35,5 +37,6 @@ export const HOT_SPOT_LINE: LineLayerSpecification = {
   id: "hot-spots",
   type: "line",
   source: "hot-spots",
-  paint: { "line-color": "#e6edf3", "line-width": 1.5, "line-opacity": 0.85 },
+  slot: "top",
+  paint: { "line-color": "#ffffff", "line-width": 2, "line-opacity": 1, "line-emissive-strength": 1 },
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, clamp, dayIndex, defaultFilter, formatDate, formatTime, fromDayIndex, sliderRange, todayUtc } from "./dates";
+import { addDays, clamp, dayIndex, defaultFilter, extendToToday, formatDate, formatTime, fromDayIndex, sliderRange, todayUtc } from "./dates";
 
 describe("dates", () => {
   it("takes today in UTC, not in the local zone", () => {
@@ -27,5 +27,12 @@ describe("dates", () => {
     expect(sliderRange(filter, "2026-09-01", "2026-10-24")).toEqual([dayIndex("2026-10-18"), dayIndex("2026-10-24")]);
     expect(sliderRange(filter, "2026-09-01", "2026-10-10")).toEqual([dayIndex("2026-10-10"), dayIndex("2026-10-10")]);
     expect(clamp(5, 1, 3)).toBe(3);
+  });
+
+  it("runs the slider up to today when the newest data is older, and keeps a later data end", () => {
+    const meta = { min_date: "2026-10-09", max_date: "2026-10-22", sources: ["s1", "s2"] };
+    expect(extendToToday(meta, "2026-10-25")).toEqual({ ...meta, max_date: "2026-10-25" });
+    expect(extendToToday(meta, "2026-10-22")).toBe(meta);
+    expect(extendToToday(meta, "2026-10-20")).toBe(meta);
   });
 });

@@ -16,7 +16,7 @@ const STYLE = import.meta.env.VITE_MAPBOX_STYLE;
 const ERROR_GAP_MS = 10000;
 
 export interface MapHandle {
-  flyTo(entry: Entry): void;
+  flyTo(entry: Entry): boolean;
 }
 
 interface Props {
@@ -26,22 +26,24 @@ interface Props {
   onSelect: (entry: Entry) => void;
   onEntries: (entries: Entry[]) => void;
   onError: (message: string) => void;
+  onSettled: () => void;
   children?: ReactNode;
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, selectedId, onSelect, onEntries, onError, children }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const queryBounds = useRef<LngLatBounds | null>(null);
-  const latest = useRef({ filter, order, selectedId, onSelect, onEntries, onError });
+  const latest = useRef({ filter, order, selectedId, onSelect, onEntries, onError, onSettled });
   const [showBack, setShowBack] = useState(false);
-  latest.current = { filter, order, selectedId, onSelect, onEntries, onError };
+  latest.current = { filter, order, selectedId, onSelect, onEntries, onError, onSettled };
 
   useImperativeHandle(ref, () => ({
     flyTo(entry) {
       const map = mapRef.current;
-      if (!map || !shouldFly(map.getZoom())) return;
+      if (!map || !shouldFly(map.getZoom())) return false;
       map.flyTo({ center: [entry.lon, entry.lat], zoom: FLY_ZOOM, essential: true });
+      return true;
     },
   }), []);
 
@@ -89,20 +91,26 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
 
     let signature = "";
     let frame = 0;
+    let settled = false;
     const refresh = () => {
+      const done = settled;
+      settled = false;
       if (!map.getLayer("pairs")) return;
       const entries = uniqueEntries(map.queryRenderedFeatures({ layers: ["pairs"] }) as unknown as TileFeature[]);
       const next = entries.map((e) => e.id).sort().join("|");
-      if (next === signature) return;
-      signature = next;
-      latest.current.onEntries(entries);
+      if (next !== signature) {
+        signature = next;
+        latest.current.onEntries(entries);
+      }
+      if (done) latest.current.onSettled();
     };
-    const schedule = () => {
+    const schedule = (isIdle: boolean) => {
+      settled = settled || isIdle;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(refresh);
     };
-    map.on("idle", schedule);
-    map.on("moveend", schedule);
+    map.on("idle", () => schedule(true));
+    map.on("moveend", () => schedule(false));
 
     map.on("zoom", () => {
       const next = map.getZoom() > QUERY_ZOOM;

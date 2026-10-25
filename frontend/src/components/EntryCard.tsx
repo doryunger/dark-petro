@@ -5,7 +5,7 @@ import type { Entry } from "../lib/types";
 interface Props {
   entry: Entry;
   selected: boolean;
-  top: number;
+  top: string;
   onSelect: (entry: Entry) => void;
 }
 

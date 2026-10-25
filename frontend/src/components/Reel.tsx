@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
-import { REVEAL_MS, ROW_HEIGHT, ROW_TOP } from "../lib/constants";
+import { REVEAL_MS, ROW_HEIGHT_REM, ROW_TOP_REM } from "../lib/constants";
+import { remPx } from "../lib/units";
 import { revealScrollTop, useVirtualRows } from "../lib/virtual";
 import type { Entry, Order } from "../lib/types";
 import EntryCard from "./EntryCard";
@@ -18,7 +19,9 @@ interface Props {
 
 const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, order, onOrder, onSelect }, ref) {
   const scroller = useRef<HTMLDivElement>(null);
-  const { start, end } = useVirtualRows(scroller, entries.length, ROW_HEIGHT);
+  const rem = remPx();
+  const rowHeight = ROW_HEIGHT_REM * rem;
+  const { start, end } = useVirtualRows(scroller, entries.length, rowHeight);
 
   const pending = useRef<{ id: string; until: number } | null>(null);
 
@@ -27,8 +30,8 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, 
     const wanted = pending.current;
     if (!el || !wanted || Date.now() > wanted.until) return;
     const index = entries.findIndex((e) => e.id === wanted.id);
-    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, ROW_HEIGHT, el.clientHeight - ROW_TOP);
-  }, [entries]);
+    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, rowHeight, el.clientHeight - ROW_TOP_REM * rem);
+  }, [entries, rowHeight, rem]);
 
   useEffect(apply, [apply]);
 
@@ -62,9 +65,9 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, 
         {entries.length === 0 ? (
           <p className="empty">No findings in this view.</p>
         ) : (
-          <div className="entries-inner" style={{ height: ROW_TOP + entries.length * ROW_HEIGHT }}>
+          <div className="entries-inner" style={{ height: `${ROW_TOP_REM + entries.length * ROW_HEIGHT_REM}rem` }}>
             {entries.slice(start, end).map((entry, i) => (
-              <EntryCard key={entry.id} entry={entry} selected={entry.id === selectedId} top={ROW_TOP + (start + i) * ROW_HEIGHT} onSelect={onSelect} />
+              <EntryCard key={entry.id} entry={entry} selected={entry.id === selectedId} top={`${ROW_TOP_REM + (start + i) * ROW_HEIGHT_REM}rem`} onSelect={onSelect} />
             ))}
           </div>
         )}

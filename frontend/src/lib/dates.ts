@@ -1,5 +1,5 @@
 import { WEEK_DAYS } from "./constants";
-import type { Filter } from "./types";
+import type { Filter, Meta } from "./types";
 
 const DAY_MS = 86400000;
 
@@ -27,6 +27,10 @@ export function formatDate(iso: string): string {
 
 export function formatTime(epochSeconds: number): string {
   return `${new Date(epochSeconds * 1000).toISOString().slice(11, 16)} UTC`;
+}
+
+export function extendToToday(meta: Meta, today: string): Meta {
+  return meta.max_date >= today ? meta : { ...meta, max_date: today };
 }
 
 export function clamp(value: number, low: number, high: number): number {

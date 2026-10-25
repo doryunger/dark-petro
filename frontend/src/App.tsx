@@ -6,8 +6,7 @@ import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
 import { fetchMetadata } from "./lib/api";
-import { SELECT_GRACE_MS } from "./lib/constants";
-import { addDays, defaultFilter, todayUtc } from "./lib/dates";
+import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
 import { sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
 import type { Entry, Filter, Meta, Order } from "./lib/types";
@@ -24,14 +23,14 @@ export default function App() {
   const [viewEntries, setViewEntries] = useState<Entry[]>([]);
   const [selected, setSelected] = useState<Entry | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [settled, setSettled] = useState(true);
   const mapRef = useRef<MapHandle>(null);
   const reelRef = useRef<ReelHandle>(null);
-  const selectedAt = useRef(0);
 
   useEffect(() => {
     let alive = true;
     fetchMetadata()
-      .then((m) => alive && setMeta(m))
+      .then((m) => alive && setMeta(extendToToday(m, todayUtc())))
       .catch(() => {
         if (!alive) return;
         setToast("Could not load the data range. Check the connection and reload.");
@@ -47,18 +46,15 @@ export default function App() {
   }, [meta]);
 
   useEffect(() => {
-    if (!selected || viewEntries.some((e) => e.id === selected.id)) return undefined;
-    const wait = Math.max(0, selectedAt.current + SELECT_GRACE_MS - Date.now());
-    const timer = setTimeout(() => setSelected((current) => (current?.id === selected.id ? null : current)), wait);
-    return () => clearTimeout(timer);
-  }, [viewEntries, selected]);
+    if (!selected || !settled || viewEntries.some((e) => e.id === selected.id)) return;
+    setSelected(null);
+  }, [viewEntries, selected, settled]);
 
   const entries = useMemo(() => sortEntries(viewEntries, order), [viewEntries, order]);
 
   const select = useCallback((entry: Entry, fromMap: boolean) => {
-    selectedAt.current = Date.now();
     setSelected(entry);
-    mapRef.current?.flyTo(entry);
+    setSettled(!mapRef.current?.flyTo(entry));
     if (fromMap) requestAnimationFrame(() => reelRef.current?.reveal(entry.id));
   }, []);
 
@@ -76,7 +72,7 @@ export default function App() {
       <Reel ref={reelRef} entries={entries} selectedId={selected?.id ?? null} order={order} onOrder={setOrder} onSelect={(entry) => select(entry, false)} />
       <Details entry={selected} onClose={() => setSelected(null)} />
       {filter ? (
-        <MapView ref={mapRef} filter={filter} order={order} selectedId={selected?.id ?? null} onSelect={(entry) => select(entry, true)} onEntries={setViewEntries} onError={setToast}>
+        <MapView ref={mapRef} filter={filter} order={order} selectedId={selected?.id ?? null} onSelect={(entry) => select(entry, true)} onEntries={setViewEntries} onError={setToast} onSettled={() => setSettled(true)}>
           <Toast message={toast} onClose={closeToast} />
         </MapView>
       ) : (

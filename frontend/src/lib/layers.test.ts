@@ -28,4 +28,12 @@ describe("layers", () => {
     expect(sizes).toEqual([0.3, 0.5, 0.8, 1]);
     expect(HOT_SPOT_LINE.type).toBe("line");
   });
+
+  it("draws the hot-spot lines white and both layers on top of the basemap at full brightness", () => {
+    expect(HOT_SPOT_LINE.paint).toMatchObject({ "line-color": "#ffffff", "line-opacity": 1, "line-emissive-strength": 1 });
+    expect(HOT_SPOT_LINE.slot).toBe("top");
+    const layer = pairsLayer({ order: "latest", selectedId: null });
+    expect(layer.slot).toBe("top");
+    expect(layer.paint?.["icon-emissive-strength"]).toBe(1);
+  });
 });
