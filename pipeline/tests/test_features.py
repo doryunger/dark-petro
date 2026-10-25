@@ -39,6 +39,12 @@ class Features(unittest.TestCase):
         self.assertAlmostEqual(F.yaw(north), 90.0, delta=0.2)
         self.assertLess(min(F.yaw(west), 360 - F.yaw(west)), 0.2)
 
+    def test_rotation_takes_the_published_heading_and_falls_back_to_the_pair_axis(self):
+        self.assertEqual(F.rotation(row(heading_deg=22.04)), 22.0)
+        self.assertEqual(F.rotation(row(heading_deg=0.0)), 0.0)
+        self.assertEqual(F.rotation(row(heading_deg=None)), F.yaw(row()))
+        self.assertIsNone(F.rotation(row(heading_deg=None, vessel_2_lat=None)))
+
     def test_yaw_is_empty_without_both_positions(self):
         self.assertIsNone(F.yaw(row(vessel_2_lat=None)))
         self.assertIsNone(F.yaw(row(vessel_1_lon=None)))

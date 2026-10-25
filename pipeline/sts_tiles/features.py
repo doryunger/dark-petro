@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def input_hash(inputs: dict[str, str]) -> str:
@@ -28,6 +28,13 @@ def local_inputs(mirror: Path, prefix: str) -> dict[str, str]:
 
 def mirror_signature(mirror: Path, prefix: str) -> tuple:
     return tuple((p.as_posix(), st.st_size, st.st_mtime_ns) for p in parquet_files(mirror, prefix) for st in (p.stat(),))
+
+
+def rotation(row: dict) -> float | None:
+    heading = row.get("heading_deg")
+    if heading is not None:
+        return round(heading % 360, 1)
+    return yaw(row)
 
 
 def yaw(row: dict) -> float | None:

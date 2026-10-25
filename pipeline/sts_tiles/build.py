@@ -49,7 +49,7 @@ TABLE_TYPES = {
 
 
 def write_table(rows: list[dict], target: Path) -> None:
-    clean = [{k: r.get(k) for k in TABLE_TYPES if k != "yaw"} | {"yaw": F.yaw(r)} for r in rows]
+    clean = [{k: r.get(k) for k in TABLE_TYPES if k != "yaw"} | {"yaw": F.rotation(r)} for r in rows]
     table = pa.Table.from_pylist(clean)
     for name, kind in TABLE_TYPES.items():
         if name not in table.column_names:
