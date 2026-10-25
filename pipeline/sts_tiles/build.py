@@ -49,8 +49,7 @@ TABLE_TYPES = {
 
 
 def write_table(rows: list[dict], target: Path) -> None:
-    drop = set(F.INTERNAL_COLUMNS) | {"source_key"}
-    clean = [{k: v for k, v in r.items() if k not in drop and not k.startswith("_")} | {"yaw": F.yaw(r)} for r in rows]
+    clean = [{k: r.get(k) for k in TABLE_TYPES if k != "yaw"} | {"yaw": F.yaw(r)} for r in rows]
     table = pa.Table.from_pylist(clean)
     for name, kind in TABLE_TYPES.items():
         if name not in table.column_names:
@@ -89,7 +88,7 @@ def build(cfg, inputs: dict[str, str], rows: list[dict], missing_captures: list[
             "build_id": name,
             "built_utc": datetime.now(timezone.utc).isoformat(),
             "input_hash": digest,
-            "inputs": [{"key": k, "etag": inputs[k]} for k in sorted(inputs)],
+            "inputs": [{"key": k, "sha256": inputs[k]} for k in sorted(inputs)],
             "missing_captures": missing_captures,
             "files": {"table": "findings.parquet", "capture_root": "mirror/"},
             **summary(rows),

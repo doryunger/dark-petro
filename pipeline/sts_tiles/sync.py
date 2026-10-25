@@ -50,20 +50,32 @@ def sync_parquets(s3, bucket: str, prefix: str, mirror: Path, state_file: Path) 
     return state
 
 
-def sync_captures(s3, bucket: str, keys: set[str], mirror: Path) -> list[str]:
-    missing = []
+def list_etags(s3, bucket: str, prefix: str) -> dict[str, str]:
+    etags = {}
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            etags[obj["Key"]] = obj["ETag"].strip('"')
+    return etags
+
+
+def sync_captures(s3, bucket: str, keys: set[str], mirror: Path, state_file: Path, prefix: str = "captures/") -> tuple[list[str], int]:
+    remote = list_etags(s3, bucket, prefix)
+    state = load_state(state_file)
+    missing, fetched = [], 0
     for key in sorted(keys):
         path = mirror / key
-        if path.exists():
-            continue
-        try:
-            obj = s3.get_object(Bucket=bucket, Key=key)
-        except s3.exceptions.NoSuchKey:
+        if key not in remote:
             missing.append(key)
             continue
+        if state.get(key) == remote[key] and path.exists():
+            continue
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        state[key] = obj["ETag"].strip('"')
         write_atomic(path, obj["Body"].read(), obj["LastModified"].timestamp())
+        fetched += 1
         log.info("fetched %s", key)
-    return missing
+    write_atomic(state_file, json.dumps({k: v for k, v in state.items() if k in keys}, indent=1, sort_keys=True).encode())
+    return missing, fetched
 
 
 def prune_captures(mirror: Path, keep: set[str], prefix: str = "captures/") -> int:

@@ -234,7 +234,16 @@ def make_handler(store: Store):
             if not f:
                 return self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             kind = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
-            self.send_bytes(HTTPStatus.OK, f.read_bytes(), kind, {"Cache-Control": "public, max-age=31536000, immutable"})
+            st = f.stat()
+            etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_bytes(HTTPStatus.OK, f.read_bytes(), kind, {"ETag": etag, "Cache-Control": "no-cache"})
 
         def app(self, path: str):
             f = safe_file(cfg.app_dir, path)

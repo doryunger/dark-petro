@@ -22,24 +22,27 @@ def s3_client(cfg: Config):
 
 def run(cfg: Config, force: bool, offline: bool) -> dict:
     s3 = None
-    if offline:
-        inputs = S.load_state(cfg.state_file)
-    else:
+    if not offline:
         if not cfg.bucket:
             raise SystemExit("STS_BUCKET is not set")
         s3 = s3_client(cfg)
-        inputs = S.sync_parquets(s3, cfg.bucket, cfg.findings_prefix, cfg.mirror, cfg.state_file)
+        S.sync_parquets(s3, cfg.bucket, cfg.findings_prefix, cfg.mirror, cfg.state_file)
+    inputs = F.local_inputs(cfg.mirror, cfg.findings_prefix)
     digest = F.input_hash(inputs)
     live = B.current_manifest(cfg)
     if not force and live and live.get("input_hash") == digest:
-        return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs)}
+        refreshed = 0
+        if s3:
+            on_disk = {path.relative_to(cfg.mirror).as_posix() for path in (cfg.mirror / "captures").rglob("*.png")}
+            _, refreshed = S.sync_captures(s3, cfg.bucket, on_disk, cfg.mirror, cfg.captures_state_file)
+        return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs), "captures_refreshed": refreshed}
     rows, dups = F.dedupe(B.read_rows(cfg.mirror, sorted(inputs)))
     if not rows:
         return {"result": "skipped_empty", "inputs": len(inputs), "build_id": live and live["build_id"]}
     if dups:
         log.warning("%d duplicate finding_id rows dropped", dups)
     wanted = F.captures(rows)
-    missing = S.sync_captures(s3, cfg.bucket, wanted, cfg.mirror) if s3 else sorted(k for k in wanted if not (cfg.mirror / k).exists())
+    missing = S.sync_captures(s3, cfg.bucket, wanted, cfg.mirror, cfg.captures_state_file)[0] if s3 else sorted(k for k in wanted if not (cfg.mirror / k).exists())
     if missing:
         log.warning("%d captures referenced but not on S3, e.g. %s", len(missing), missing[0])
     out = B.build(cfg, inputs, rows, missing)
@@ -68,7 +71,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", stream=sys.stdout)
     logging.getLogger("botocore").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(prog="sts_tiles")
-    parser.add_argument("command", choices=("run", "build", "listen", "serve"), nargs="?", default="run")
+    parser.add_argument("command", choices=("run", "build", "listen", "watch", "serve"), nargs="?", default="run")
     parser.add_argument("--force", action="store_true", help="rebuild even when the inputs are unchanged")
     args = parser.parse_args()
     cfg = Config.from_env()
@@ -76,6 +79,9 @@ def main() -> int:
     if args.command == "serve":
         from .serve import serve
         return serve(cfg)
+    if args.command == "watch":
+        from .watch import watch
+        return watch(cfg, lambda: run_once(cfg, False, True, "watch"))
     if args.command == "listen":
         from .listen import listen
         queue_url = os.environ.get("STS_QUEUE_URL")

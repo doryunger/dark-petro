@@ -14,6 +14,7 @@ class Config:
     app_dir: Path
     extension_dir: str
     duckdb_memory: str
+    watch_s: float
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -27,6 +28,7 @@ class Config:
             app_dir=Path(os.environ.get("STS_APP_DIR", "/app/dist")),
             extension_dir=os.environ.get("STS_DUCKDB_EXTENSIONS", "/opt/duckdb-extensions"),
             duckdb_memory=os.environ.get("STS_DUCKDB_MEMORY", "200MB"),
+            watch_s=float(os.environ.get("STS_WATCH_S", "5")),
         )
 
     @property
@@ -44,6 +46,10 @@ class Config:
     @property
     def state_file(self) -> Path:
         return self.data_dir / "state.json"
+
+    @property
+    def captures_state_file(self) -> Path:
+        return self.data_dir / "captures_state.json"
 
     @property
     def status_file(self) -> Path:

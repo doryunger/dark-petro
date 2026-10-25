@@ -41,7 +41,7 @@ def finding(n: int, source: str, day: int, **over) -> dict:
 
 def make_config(root: Path) -> Config:
     return Config(bucket="", findings_prefix="sts/", data_dir=root, keep_builds=5, region=None, port=0, app_dir=root / "app",
-                  extension_dir=EXTENSIONS, duckdb_memory="100MB")
+                  extension_dir=EXTENSIONS, duckdb_memory="100MB", watch_s=1.0)
 
 
 def make_data(root: Path, rows: list[dict]) -> None:
@@ -177,7 +177,8 @@ class Serving(unittest.TestCase):
     def test_captures_and_the_app(self):
         status, headers, body = self.get("/captures/1.png")
         self.assertEqual((status, body, headers["Content-Type"]), (200, b"png", "image/png"))
-        self.assertIn("immutable", headers["Cache-Control"])
+        self.assertEqual(headers["Cache-Control"], "no-cache")
+        self.assertEqual(self.get("/captures/1.png", {"If-None-Match": headers["ETag"]})[0], 304)
         self.assertEqual(self.get("/captures/2.png")[0], 404)
         self.assertEqual(self.get("/captures/../../builds/b1/findings.parquet")[0], 404)
         status, headers, body = self.get("/anything/deep")

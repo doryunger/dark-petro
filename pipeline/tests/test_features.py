@@ -16,7 +16,7 @@ def row(**over):
         "measures": '{"hull_a_length_m": 367.5, "hull_b_length_m": 146.1, "width_ratio": 1.2}', "ais_covered": True,
         "vessel_1_lat": 24.6245, "vessel_1_lon": 57.5973, "vessel_1_name": None, "vessel_1_flag": None, "vessel_1_is_sanctioned": False,
         "vessel_2_lat": 24.6251, "vessel_2_lon": 57.5972, "vessel_2_name": "ASTRO SIRIUS", "vessel_2_flag": "TV", "vessel_2_is_sanctioned": False,
-        "capture_png": "captures/a.png", "capture_markers_png": "captures/a_markers.png",
+        "capture_png": "captures/a.png",
     }
     return base | over
 
@@ -44,21 +44,33 @@ class Features(unittest.TestCase):
         self.assertIsNone(F.yaw(row(vessel_1_lon=None)))
 
     def test_captures(self):
-        self.assertEqual(F.captures([row(), row(capture_markers_png=None)]), {"captures/a.png", "captures/a_markers.png"})
+        self.assertEqual(F.captures([row(), row(capture_png=None)]), {"captures/a.png"})
+
+
+class LocalInputs(unittest.TestCase):
+    def test_hash_follows_the_file_content_not_the_s3_etag(self):
+        with tempfile.TemporaryDirectory() as d:
+            mirror = Path(d)
+            f = mirror / "sts" / "2026-10-01" / "off_sohar" / "s1.parquet"
+            f.parent.mkdir(parents=True)
+            f.write_bytes(b"one")
+            a = F.local_inputs(mirror, "sts/")
+            sig = F.mirror_signature(mirror, "sts/")
+            self.assertEqual(list(a), ["sts/2026-10-01/off_sohar/s1.parquet"])
+            self.assertEqual(a, F.local_inputs(mirror, "sts/"))
+            f.write_bytes(b"two!")
+            self.assertNotEqual(a, F.local_inputs(mirror, "sts/"))
+            self.assertNotEqual(sig, F.mirror_signature(mirror, "sts/"))
 
 
 class Table(unittest.TestCase):
-    def test_parquet_has_no_internal_columns(self):
-        rows = [row(job_id="j", attempt_id="a", review_prefix="catalogue/x/", code_commit="c", rules_sha256="r", scene_id="S2", _source_mtime=1, source_key="sts/x.parquet")]
+    def test_parquet_has_only_the_columns_the_tiles_read(self):
+        rows = [row(job_id="j", review_prefix="catalogue/x/", verdict="v", _source_mtime=1, source_key="sts/x.parquet")]
         with tempfile.TemporaryDirectory() as d:
             target = Path(d) / "findings.parquet"
             B.write_table(rows, target)
             names = pq.read_table(target).column_names
-        for k in (*F.INTERNAL_COLUMNS, "_source_mtime", "source_key"):
-            self.assertNotIn(k, names)
-        self.assertIn("finding_id", names)
-        self.assertIn("capture_png", names)
-        self.assertIn("yaw", names)
+        self.assertEqual(set(names), set(B.TABLE_TYPES))
 
     def test_parquet_has_every_column_the_tiles_read(self):
         with tempfile.TemporaryDirectory() as d:

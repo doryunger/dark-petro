@@ -40,8 +40,8 @@ that edit.
 `johor_east_scs`). Tests, checks and progress reports cover all of them; where one has no data, say so explicitly.
 
 **Public by design.** The repo and the viewer are both open to everyone, and the viewer is read-only, so nothing in the published files (tiles, JSON, Parquet,
-captures) may expose internal storage, credentials or provenance. Check any new column before it goes into a tile or a
-public file; the exclusions are `INTERNAL_COLUMNS` in `pipeline/sts_tiles/features.py`. The monitor app is behind a login
+captures) may expose internal storage, credentials or provenance. The published Parquet holds only the columns the viewer reads (`TABLE_TYPES` in `pipeline/sts_tiles/build.py`); adding a column
+means adding it there, deliberately, and bumping `SCHEMA_VERSION`. The monitor app is behind a login
 because it can change data; never route the viewer to it or share its credentials with the viewer.
 
 **Shared server.** The server also runs the monitor app, job manager, Redis, GizmoSQL and the proxy, with about 2 GB of

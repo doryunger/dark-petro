@@ -1,8 +1,9 @@
 import hashlib
 import math
+from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 9
 
 
 def input_hash(inputs: dict[str, str]) -> str:
@@ -10,7 +11,23 @@ def input_hash(inputs: dict[str, str]) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-INTERNAL_COLUMNS = ("job_id", "attempt_id", "review_prefix", "rules_sha256", "code_commit", "detector_revision", "run", "scene_id", "hull_id")
+def parquet_files(mirror: Path, prefix: str) -> list[Path]:
+    return sorted((mirror / prefix).rglob("*.parquet"))
+
+
+def local_inputs(mirror: Path, prefix: str) -> dict[str, str]:
+    out = {}
+    for path in parquet_files(mirror, prefix):
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+        out[path.relative_to(mirror).as_posix()] = digest.hexdigest()
+    return out
+
+
+def mirror_signature(mirror: Path, prefix: str) -> tuple:
+    return tuple((p.as_posix(), st.st_size, st.st_mtime_ns) for p in parquet_files(mirror, prefix) for st in (p.stat(),))
 
 
 def yaw(row: dict) -> float | None:
@@ -24,7 +41,7 @@ def yaw(row: dict) -> float | None:
 
 
 def captures(rows: list[dict]) -> set[str]:
-    return {row[k] for row in rows for k in ("capture_png", "capture_markers_png") if row.get(k)}
+    return {row["capture_png"] for row in rows if row.get("capture_png")}
 
 
 def dedupe(rows: list[dict]) -> tuple[list[dict], int]:
