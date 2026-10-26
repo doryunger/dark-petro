@@ -1,8 +1,9 @@
-import type { Entry, Filter } from "./types";
+import type { Entry, Filter, Tab } from "./types";
 
-export function tileUrl(origin: string, filter: Filter): string {
+export function tileUrl(origin: string, filter: Filter, tab: Tab = "pairs"): string {
   const params = [`from=${filter.from}`, `to=${filter.to}`, `source=${[...filter.sources].sort().join(",")}`];
-  return `${origin}/tiles/{z}/{x}/{y}.mvt?${params.join("&")}`;
+  const path = tab === "pairs" ? "tiles" : `tiles/${tab}`;
+  return `${origin}/${path}/{z}/{x}/{y}.mvt?${params.join("&")}`;
 }
 
 export function matches(entry: Pick<Entry, "date" | "source">, filter: Filter): boolean {

@@ -3,11 +3,15 @@ import { formatDate, formatTime } from "../lib/dates";
 import { hotSpotLabel, sourceName } from "../lib/entries";
 import type { Entry, Vessel as VesselData } from "../lib/types";
 
-function Vessel({ number, vessel }: { number: number; vessel: VesselData }) {
+function Vessel({ number, vessel }: { number?: number; vessel: VesselData }) {
   return (
     <div className="detail-row">
       <span className="detail-label">
-        <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
+        {number === undefined ? (
+          "Vessel"
+        ) : (
+          <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
+        )}
       </span>
       <span className="detail-value">
         {vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
@@ -28,12 +32,12 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Capture({ image }: { image: string | null }) {
+function Capture({ image, alt }: { image: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
   if (!image || failed) return <div className="details-image">Image not available</div>;
   return (
     <div className="details-image">
-      <img src={`/${image}`} alt="Capture of the pair" onError={() => setFailed(true)} />
+      <img src={`/${image}`} alt={alt} onError={() => setFailed(true)} />
     </div>
   );
 }
@@ -43,7 +47,7 @@ export default function Details({ entry, onClose }: { entry: Entry | null; onClo
   return (
     <section className="details">
       <header className="details-header">
-        <span className={`details-icon${entry.sanctioned ? "" : " details-icon-clear"}`} />
+        <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />
         <h2 className="details-id">{entry.shortId}</h2>
         <button className="details-close" type="button" aria-label="Close" onClick={onClose}>
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -53,11 +57,12 @@ export default function Details({ entry, onClose }: { entry: Entry | null; onClo
         </button>
       </header>
       <div className="details-content">
-        <Capture key={entry.id} image={entry.image} />
+        <Capture key={entry.id} image={entry.image} alt={entry.tab === "sanctioned" ? "Capture of the vessel" : "Capture of the pair"} />
         <div className="details-source">Source: {sourceName(entry.source)}</div>
         <div className="details-body">
-          <Vessel number={1} vessel={entry.vessels[0]} />
-          <Vessel number={2} vessel={entry.vessels[1]} />
+          {entry.vessels.map((vessel, i) => (
+            <Vessel key={i} number={entry.vessels.length > 1 ? i + 1 : undefined} vessel={vessel} />
+          ))}
           <Row label="Date" value={formatDate(entry.date)} />
           <Row label="Time" value={formatTime(entry.t)} />
           <Row label="Area" value={hotSpotLabel(entry.hotSpot)} />

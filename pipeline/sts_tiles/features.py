@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 13
 
 
 def input_hash(inputs: dict[str, str]) -> str:
@@ -11,13 +11,13 @@ def input_hash(inputs: dict[str, str]) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def parquet_files(mirror: Path, prefix: str) -> list[Path]:
-    return sorted((mirror / prefix).rglob("*.parquet"))
+def parquet_files(mirror: Path, *prefixes: str) -> list[Path]:
+    return sorted(path for prefix in prefixes for path in (mirror / prefix).rglob("*.parquet"))
 
 
-def local_inputs(mirror: Path, prefix: str) -> dict[str, str]:
+def local_inputs(mirror: Path, *prefixes: str) -> dict[str, str]:
     out = {}
-    for path in parquet_files(mirror, prefix):
+    for path in parquet_files(mirror, *prefixes):
         digest = hashlib.sha256()
         with open(path, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -26,8 +26,8 @@ def local_inputs(mirror: Path, prefix: str) -> dict[str, str]:
     return out
 
 
-def mirror_signature(mirror: Path, prefix: str) -> tuple:
-    return tuple((p.as_posix(), st.st_size, st.st_mtime_ns) for p in parquet_files(mirror, prefix) for st in (p.stat(),))
+def mirror_signature(mirror: Path, *prefixes: str) -> tuple:
+    return tuple((p.as_posix(), st.st_size, st.st_mtime_ns) for p in parquet_files(mirror, *prefixes) for st in (p.stat(),))
 
 
 def rotation(row: dict) -> float | None:

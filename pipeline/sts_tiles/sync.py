@@ -22,17 +22,18 @@ def write_atomic(path: Path, data: bytes, mtime: float | None = None) -> None:
     os.replace(tmp, path)
 
 
-def list_parquets(s3, bucket: str, prefix: str) -> dict[str, str]:
+def list_parquets(s3, bucket: str, prefixes: tuple[str, ...]) -> dict[str, str]:
     keys = {}
-    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".parquet"):
-                keys[obj["Key"]] = obj["ETag"].strip('"')
+    for prefix in prefixes:
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(".parquet"):
+                    keys[obj["Key"]] = obj["ETag"].strip('"')
     return keys
 
 
-def sync_parquets(s3, bucket: str, prefix: str, mirror: Path, state_file: Path) -> dict[str, str]:
-    remote = list_parquets(s3, bucket, prefix)
+def sync_parquets(s3, bucket: str, prefixes: tuple[str, ...], mirror: Path, state_file: Path) -> dict[str, str]:
+    remote = list_parquets(s3, bucket, prefixes)
     state = load_state(state_file)
     for key, etag in sorted(remote.items()):
         path = mirror / key

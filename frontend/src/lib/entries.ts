@@ -1,6 +1,6 @@
 import hotSpots from "../data/hot_spots.json";
 import { SOURCE_NAMES } from "./constants";
-import type { Entry, Order, TileFeature, Vessel } from "./types";
+import type { Entry, Order, Tab, TileFeature, Vessel } from "./types";
 
 const LABELS = Object.fromEntries(hotSpots.features.map((f) => [f.properties.name, f.properties.label])) as Record<string, string>;
 
@@ -10,6 +10,11 @@ export function shortId(id: string): string {
 
 export function sourceName(code: string): string {
   return SOURCE_NAMES[code] ?? code;
+}
+
+export function entryIconClass(entry: Pick<Entry, "tab" | "sanctioned">): string {
+  const kind = entry.tab === "sanctioned" ? " entry-icon-vessel" : "";
+  return `entry-icon${kind}${entry.sanctioned ? " entry-icon-sanctioned" : ""}`;
 }
 
 export function hotSpotLabel(name: string | null | undefined): string {
@@ -26,28 +31,30 @@ function vessel(p: TileFeature["properties"], n: 1 | 2): Vessel {
   };
 }
 
-export function toEntry(feature: TileFeature): Entry {
+export function toEntry(feature: TileFeature, tab: Tab = "pairs"): Entry {
   const p = feature.properties;
   const [tileLon, tileLat] = feature.geometry.coordinates;
+  const single = tab === "sanctioned";
   return {
     id: p.id,
+    tab,
     shortId: shortId(p.id),
     date: p.date,
     t: p.t,
     hotSpot: p.hot_spot,
     source: p.source,
-    sanctioned: p.sanctioned === true,
+    sanctioned: single || p.sanctioned === true,
     image: p.image ?? null,
     lon: p.lon ?? tileLon,
     lat: p.lat ?? tileLat,
-    vessels: [vessel(p, 1), vessel(p, 2)],
+    vessels: single ? [{ ...vessel(p, 1), sanctioned: true }] : [vessel(p, 1), vessel(p, 2)],
   };
 }
 
-export function uniqueEntries(features: TileFeature[]): Entry[] {
+export function uniqueEntries(features: TileFeature[], tab: Tab = "pairs"): Entry[] {
   const seen = new Map<string, Entry>();
   for (const feature of features) {
-    if (!seen.has(feature.properties.id)) seen.set(feature.properties.id, toEntry(feature));
+    if (!seen.has(feature.properties.id)) seen.set(feature.properties.id, toEntry(feature, tab));
   }
   return [...seen.values()];
 }

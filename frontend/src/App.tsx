@@ -9,7 +9,7 @@ import { fetchMetadata } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
 import { sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
-import type { Entry, Filter, Meta, Order } from "./lib/types";
+import type { Entry, Filter, Meta, Order, Tab } from "./lib/types";
 
 function fallbackMeta(): Meta {
   const today = todayUtc();
@@ -19,6 +19,7 @@ function fallbackMeta(): Meta {
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [filter, setFilter] = useState<Filter | null>(null);
+  const [tab, setTab] = useState<Tab>("pairs");
   const [order, setOrder] = useState<Order>("latest");
   const [viewEntries, setViewEntries] = useState<Entry[]>([]);
   const [selected, setSelected] = useState<Entry | null>(null);
@@ -63,16 +64,23 @@ export default function App() {
     setSelected((current) => (current && !matches(current, next) ? null : current));
   }, []);
 
+  const changeTab = useCallback((next: Tab) => {
+    setTab(next);
+    setSelected(null);
+    setViewEntries([]);
+    setSettled(true);
+  }, []);
+
   const closeToast = useCallback(() => setToast(null), []);
 
   return (
     <>
       <Header />
       {meta && filter ? <Filters meta={meta} applied={filter} onApply={apply} /> : <section className="filters" />}
-      <Reel ref={reelRef} entries={entries} selectedId={selected?.id ?? null} order={order} onOrder={setOrder} onSelect={(entry) => select(entry, false)} />
+      <Reel ref={reelRef} tab={tab} onTab={changeTab} entries={entries} selectedId={selected?.id ?? null} order={order} onOrder={setOrder} onSelect={(entry) => select(entry, false)} />
       <Details entry={selected} onClose={() => setSelected(null)} />
       {filter ? (
-        <MapView ref={mapRef} filter={filter} order={order} selectedId={selected?.id ?? null} onSelect={(entry) => select(entry, true)} onEntries={setViewEntries} onError={setToast} onSettled={() => setSettled(true)}>
+        <MapView ref={mapRef} tab={tab} filter={filter} order={order} selectedId={selected?.id ?? null} onSelect={(entry) => select(entry, true)} onEntries={setViewEntries} onError={setToast} onSettled={() => setSettled(true)}>
           <Toast message={toast} onClose={closeToast} />
         </MapView>
       ) : (

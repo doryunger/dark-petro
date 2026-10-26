@@ -21,6 +21,16 @@ def row(**over):
     return base | over
 
 
+def single(**over):
+    base = {
+        "finding_id": "s1_20261019T141603_w0-44977-274982", "lat": 24.8626, "lon": 56.5028, "hot_spot": "fujairah_outer", "source": "s1",
+        "capture_utc": datetime(2026, 10, 19, 14, 16, 3, tzinfo=timezone.utc), "verdict": "single", "qa_status": "unreviewed",
+        "vessel_lat": 24.8624, "vessel_lon": 56.5030, "vessel_name": "NESO", "vessel_flag": "ST", "vessel_imo": "9257149", "vessel_is_sanctioned": True,
+        "vessel_sanctions_lists": "OFAC", "vessel_sanctions_programs": "IRAN-EO13902", "vessel_mmsi": "123", "capture_png": "captures/b.png",
+    }
+    return base | over
+
+
 class Features(unittest.TestCase):
     def test_rejected_findings_are_hidden_and_the_others_stay(self):
         rows = [row(finding_id=f"s1_1_{s}", qa_status=s) for s in ("confirmed", "rejected", "corrected", "unreviewed", None)]
@@ -61,6 +71,12 @@ class Features(unittest.TestCase):
         self.assertIsNone(F.yaw(row(vessel_2_lat=None)))
         self.assertIsNone(F.yaw(row(vessel_1_lon=None)))
 
+    def test_sanctioned_vessels_are_deduped_and_filtered_like_pairs(self):
+        old = single(qa_status="confirmed", _source_mtime=1)
+        new = single(qa_status="rejected", _source_mtime=2)
+        kept, dropped = F.dedupe([old, new])
+        self.assertEqual((F.visible(kept), dropped), ([], 1))
+
     def test_captures(self):
         self.assertEqual(F.captures([row(), row(capture_png=None)]), {"captures/a.png"})
 
@@ -80,6 +96,16 @@ class LocalInputs(unittest.TestCase):
             self.assertNotEqual(a, F.local_inputs(mirror, "sts/"))
             self.assertNotEqual(sig, F.mirror_signature(mirror, "sts/"))
 
+    def test_both_prefixes_are_hashed(self):
+        with tempfile.TemporaryDirectory() as d:
+            mirror = Path(d)
+            for key in ("sts/2026-10-01/off_sohar/s1.parquet", "sanctioned/2026-10-01/off_sohar/s1.parquet"):
+                (mirror / key).parent.mkdir(parents=True)
+                (mirror / key).write_bytes(b"x")
+            self.assertEqual(list(F.local_inputs(mirror, "sts/", "sanctioned/")), ["sanctioned/2026-10-01/off_sohar/s1.parquet", "sts/2026-10-01/off_sohar/s1.parquet"])
+            self.assertEqual(len(F.mirror_signature(mirror, "sts/", "sanctioned/")), 2)
+            self.assertEqual(len(F.mirror_signature(mirror, "sts/")), 1)
+
 
 class Table(unittest.TestCase):
     def test_parquet_has_only_the_columns_the_tiles_read(self):
@@ -97,6 +123,29 @@ class Table(unittest.TestCase):
             schema = pq.read_table(target).schema
         for name, kind in B.TABLE_TYPES.items():
             self.assertEqual(schema.field(name).type, kind, name)
+
+    def test_sanctioned_parquet_has_only_the_columns_the_tiles_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "sanctioned.parquet"
+            B.write_table([single(vessel_imo=9257149)], target, B.SANCTIONED_TYPES)
+            table = pq.read_table(target)
+        self.assertEqual(set(table.column_names), set(B.SANCTIONED_TYPES))
+        for name, kind in B.SANCTIONED_TYPES.items():
+            self.assertEqual(table.schema.field(name).type, kind, name)
+        self.assertEqual(table.column("vessel_imo").to_pylist(), ["9257149"])
+
+    def test_sanctioned_vessel_yaw_is_the_published_heading_and_empty_without_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "sanctioned.parquet"
+            B.write_table([single(heading_deg=93.26), single(finding_id="b", heading_deg=None), single(finding_id="c")], target, B.SANCTIONED_TYPES)
+            self.assertEqual(pq.read_table(target).column("yaw").to_pylist(), [93.3, None, None])
+
+    def test_no_sanctioned_vessels_still_writes_the_table(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "sanctioned.parquet"
+            B.write_table([], target, B.SANCTIONED_TYPES)
+            table = pq.read_table(target)
+        self.assertEqual((table.num_rows, set(table.column_names)), (0, set(B.SANCTIONED_TYPES)))
 
     def test_integer_imo_becomes_text(self):
         with tempfile.TemporaryDirectory() as d:

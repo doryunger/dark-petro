@@ -200,6 +200,37 @@ body {
   border-right: 1px solid #091722;
 }
 
+.tabs {
+  flex: none;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 0.5rem 0;
+}
+
+.tab {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #9fb3c2;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: #ffffff;
+}
+
+.tab-active {
+  border-bottom-color: #4fd0e4;
+  color: #ffffff;
+}
+
 .sort {
   display: flex;
   align-items: center;
@@ -304,6 +335,11 @@ body {
   mask: url("../assets/icons/sts-pair.svg") center / contain no-repeat;
 }
 
+.entry-icon-vessel {
+  -webkit-mask-image: url("../assets/icons/sts-vessel.svg");
+  mask-image: url("../assets/icons/sts-vessel.svg");
+}
+
 .entry-icon-sanctioned {
   background: #d64545;
 }
@@ -378,6 +414,11 @@ body {
   transform: rotate(90deg);
   -webkit-mask: url("../assets/icons/sts-pair.svg") center / contain no-repeat;
   mask: url("../assets/icons/sts-pair.svg") center / contain no-repeat;
+}
+
+.details-icon-vessel {
+  -webkit-mask-image: url("../assets/icons/sts-vessel.svg");
+  mask-image: url("../assets/icons/sts-vessel.svg");
 }
 
 .details-icon-clear {

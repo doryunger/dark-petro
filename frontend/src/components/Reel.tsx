@@ -2,14 +2,17 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import { REVEAL_MS, ROW_HEIGHT_REM, ROW_TOP_REM } from "../lib/constants";
 import { remPx } from "../lib/units";
 import { revealScrollTop, useVirtualRows } from "../lib/virtual";
-import type { Entry, Order } from "../lib/types";
+import type { Entry, Order, Tab } from "../lib/types";
 import EntryCard from "./EntryCard";
+import Tabs from "./Tabs";
 
 export interface ReelHandle {
   reveal(id: string): void;
 }
 
 interface Props {
+  tab: Tab;
+  onTab: (tab: Tab) => void;
   entries: Entry[];
   selectedId: string | null;
   order: Order;
@@ -17,7 +20,7 @@ interface Props {
   onSelect: (entry: Entry) => void;
 }
 
-const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, order, onOrder, onSelect }, ref) {
+const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, selectedId, order, onOrder, onSelect }, ref) {
   const scroller = useRef<HTMLDivElement>(null);
   const rem = remPx();
   const rowHeight = ROW_HEIGHT_REM * rem;
@@ -34,6 +37,11 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, 
   }, [entries, rowHeight, rem]);
 
   useEffect(apply, [apply]);
+
+  useEffect(() => {
+    pending.current = null;
+    if (scroller.current) scroller.current.scrollTop = 0;
+  }, [tab]);
 
   useImperativeHandle(
     ref,
@@ -52,6 +60,7 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ entries, selectedId, 
 
   return (
     <section className="reel">
+      <Tabs tab={tab} onTab={onTab} />
       <div className="sort">
         <label className="sort-label" htmlFor="sort">
           Sort by

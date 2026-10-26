@@ -3,8 +3,10 @@ import hotSpots from "../data/hot_spots.json";
 import { featureBounds, shouldFly, topCenter } from "./geo";
 
 describe("geo", () => {
-  it("flies only below zoom 12, fractional zoom included", () => {
-    expect(shouldFly(11.99)).toBe(true);
+  it("flies only up to zoom 11, fractional zoom included", () => {
+    expect(shouldFly(4)).toBe(true);
+    expect(shouldFly(11)).toBe(true);
+    expect(shouldFly(11.01)).toBe(false);
     expect(shouldFly(12)).toBe(false);
     expect(shouldFly(13)).toBe(false);
   });

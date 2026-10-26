@@ -1,8 +1,8 @@
-import { FLY_BELOW_ZOOM } from "./constants";
+import { FLY_UP_TO_ZOOM } from "./constants";
 import type { Bounds, HotSpotCollection, HotSpotFeature, LngLat } from "./types";
 
 export function shouldFly(zoom: number): boolean {
-  return zoom < FLY_BELOW_ZOOM;
+  return zoom <= FLY_UP_TO_ZOOM;
 }
 
 export function featureBounds(collection: HotSpotCollection): Bounds {

@@ -48,10 +48,25 @@ TABLE_TYPES = {
 }
 
 
-def write_table(rows: list[dict], target: Path) -> None:
-    clean = [{k: r.get(k) for k in TABLE_TYPES if k != "yaw"} | {"yaw": F.rotation(r)} for r in rows]
+SANCTIONED_TYPES = {
+    "finding_id": pa.string(),
+    "lat": pa.float64(),
+    "lon": pa.float64(),
+    "capture_utc": pa.timestamp("us", tz="UTC"),
+    "hot_spot": pa.string(),
+    "source": pa.string(),
+    "capture_png": pa.string(),
+    "yaw": pa.float64(),
+    "vessel_name": pa.string(),
+    "vessel_flag": pa.string(),
+    "vessel_imo": pa.string(),
+}
+
+
+def write_table(rows: list[dict], target: Path, types: dict = TABLE_TYPES) -> None:
+    clean = [{k: r.get(k) for k in types if k != "yaw"} | ({"yaw": F.rotation(r)} if "yaw" in types else {}) for r in rows]
     table = pa.Table.from_pylist(clean)
-    for name, kind in TABLE_TYPES.items():
+    for name, kind in types.items():
         if name not in table.column_names:
             table = table.append_column(name, pa.nulls(table.num_rows, kind))
         elif table.schema.field(name).type != kind:
@@ -74,7 +89,7 @@ def summary(rows: list[dict]) -> dict:
     }
 
 
-def build(cfg, inputs: dict[str, str], rows: list[dict], missing_captures: list[str]) -> Path:
+def build(cfg, inputs: dict[str, str], rows: list[dict], sanctioned: list[dict], missing_captures: list[str]) -> Path:
     digest = F.input_hash(inputs)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     name = f"{stamp}-{digest[:12]}"
@@ -84,14 +99,16 @@ def build(cfg, inputs: dict[str, str], rows: list[dict], missing_captures: list[
     work.mkdir()
     try:
         write_table(rows, work / "findings.parquet")
+        write_table(sanctioned, work / "sanctioned.parquet", SANCTIONED_TYPES)
         manifest = {
             "build_id": name,
             "built_utc": datetime.now(timezone.utc).isoformat(),
             "input_hash": digest,
             "inputs": [{"key": k, "sha256": inputs[k]} for k in sorted(inputs)],
             "missing_captures": missing_captures,
-            "files": {"table": "findings.parquet", "capture_root": "mirror/"},
+            "files": {"table": "findings.parquet", "sanctioned": "sanctioned.parquet", "capture_root": "mirror/"},
             **summary(rows),
+            "sanctioned": summary(sanctioned),
         }
         (work / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str))
         final = cfg.builds / name

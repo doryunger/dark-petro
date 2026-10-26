@@ -15,35 +15,50 @@ import duckdb
 log = logging.getLogger(__name__)
 
 MAX_ZOOM = 14
-TILE_PATH = re.compile(r"^/tiles/(\d{1,2})/(\d{1,5})/(\d{1,5})\.mvt$")
+TILE_PATH = re.compile(r"^/tiles/(?:(sanctioned)/)?(\d{1,2})/(\d{1,5})/(\d{1,5})\.mvt$")
 DATE_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ALLOWED_PARAMS = {"from", "to", "source"}
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 TILE_MARGIN = 0.1
 
 TILE_SQL = """
-SELECT ST_AsMVT({
-  'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
-  'sanctioned': sanctioned, 'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
-  'v1_name': vessel_1_name, 'v1_flag': vessel_1_flag, 'v1_imo': vessel_1_imo, 'v1_sanctioned': v1_sanctioned,
-  'v2_name': vessel_2_name, 'v2_flag': vessel_2_flag, 'v2_imo': vessel_2_imo, 'v2_sanctioned': v2_sanctioned
-}, 'pairs')
+SELECT ST_AsMVT({%PROPS%}, '%LAYER%')
 FROM (
   SELECT *,
     ST_AsMVTGeom(ST_Transform(ST_Point(lon, lat), 'EPSG:4326', 'EPSG:3857', always_xy := true), ST_Extent(ST_TileEnvelope(?, ?, ?))) AS geom
   FROM (
     SELECT *,
       strftime(capture_utc, '%Y-%m-%d') AS day,
-      epoch(capture_utc)::BIGINT AS t,
-      coalesce(vessel_1_is_sanctioned, false) AS v1_sanctioned,
-      coalesce(vessel_2_is_sanctioned, false) AS v2_sanctioned,
-      coalesce(vessel_1_is_sanctioned, false) OR coalesce(vessel_2_is_sanctioned, false) AS sanctioned
+      epoch(capture_utc)::BIGINT AS t%DERIVED%
     FROM read_parquet(?)
     WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?{extra}
   )
 )
 WHERE geom IS NOT NULL
 """
+
+PAIR_PROPS = """
+  'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
+  'sanctioned': sanctioned, 'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
+  'v1_name': vessel_1_name, 'v1_flag': vessel_1_flag, 'v1_imo': vessel_1_imo, 'v1_sanctioned': v1_sanctioned,
+  'v2_name': vessel_2_name, 'v2_flag': vessel_2_flag, 'v2_imo': vessel_2_imo, 'v2_sanctioned': v2_sanctioned
+"""
+
+PAIR_DERIVED = """,
+      coalesce(vessel_1_is_sanctioned, false) AS v1_sanctioned,
+      coalesce(vessel_2_is_sanctioned, false) AS v2_sanctioned,
+      coalesce(vessel_1_is_sanctioned, false) OR coalesce(vessel_2_is_sanctioned, false) AS sanctioned"""
+
+SANCTIONED_PROPS = """
+  'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
+  'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
+  'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo
+"""
+
+LAYERS = {
+    "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED)},
+    "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "")},
+}
 
 
 class BadRequest(Exception):
@@ -65,14 +80,25 @@ def padded_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:
     return max(west - dx, -180.0), max(south - dy, -90.0), min(east + dx, 180.0), min(north + dy, 90.0)
 
 
-def parse_tile_path(path: str) -> tuple[int, int, int]:
+def parse_tile_request(path: str) -> tuple[str, int, int, int]:
     m = TILE_PATH.match(path)
     if not m:
         raise BadRequest("not a tile path")
-    z, x, y = (int(g) for g in m.groups())
+    z, x, y = (int(g) for g in m.groups()[1:])
     if z > MAX_ZOOM or x >= 2 ** z or y >= 2 ** z:
         raise BadRequest("tile out of range")
-    return z, x, y
+    return m.group(1) or "pairs", z, x, y
+
+
+def known_sources(manifest: dict) -> list[str]:
+    return sorted(set(manifest.get("by_source", {})) | set(manifest.get("sanctioned", {}).get("by_source", {})))
+
+
+def date_range(manifest: dict) -> tuple[str, str] | None:
+    ranges = [r for r in (manifest.get("time_range"), manifest.get("sanctioned", {}).get("time_range")) if r]
+    if not ranges:
+        return None
+    return min(r[0] for r in ranges)[:10], max(r[1] for r in ranges)[:10]
 
 
 def parse_day(text: str) -> date:
@@ -130,11 +156,15 @@ class Store:
 
     def metadata(self) -> dict | None:
         m = self.manifest()
-        if not m or not m.get("time_range"):
+        span = date_range(m) if m else None
+        if not span:
             return None
-        return {"min_date": m["time_range"][0][:10], "max_date": m["time_range"][1][:10], "sources": sorted(m.get("by_source", {}))}
+        return {"min_date": span[0], "max_date": span[1], "sources": known_sources(m)}
 
-    def tile(self, z: int, x: int, y: int, filters: dict) -> bytes:
+    def tile(self, layer: str, z: int, x: int, y: int, filters: dict) -> bytes:
+        source = self.cfg.current / LAYERS[layer]["file"]
+        if not source.exists():
+            return b""
         west, south, east, north = padded_bounds(z, x, y)
         extra, args = "", []
         if filters["from"]:
@@ -148,7 +178,7 @@ class Store:
             args.append(filters["sources"])
         cur = self.con.cursor()
         try:
-            row = cur.execute(TILE_SQL.replace("{extra}", extra), [z, x, y, str(self.cfg.current / "findings.parquet"), west, east, south, north, *args]).fetchone()
+            row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra), [z, x, y, str(source), west, east, south, north, *args]).fetchone()
         finally:
             cur.close()
         return bytes(row[0]) if row and row[0] else b""
@@ -211,8 +241,8 @@ def make_handler(store: Store):
             manifest = store.manifest()
             if not manifest:
                 return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
-            z, x, y = parse_tile_path(path)
-            filters = parse_filters(query, sorted(manifest.get("by_source", {})))
+            layer, z, x, y = parse_tile_request(path)
+            filters = parse_filters(query, known_sources(manifest))
             etag = etag_for(manifest["build_id"], path, query)
             if self.headers.get("If-None-Match") == etag:
                 self.send_response(HTTPStatus.NOT_MODIFIED)
@@ -221,7 +251,7 @@ def make_handler(store: Store):
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
-            self.send_bytes(HTTPStatus.OK, store.tile(z, x, y, filters), MVT_TYPE, {"ETag": etag, "Cache-Control": "no-cache"})
+            self.send_bytes(HTTPStatus.OK, store.tile(layer, z, x, y, filters), MVT_TYPE, {"ETag": etag, "Cache-Control": "no-cache"})
 
         def metadata(self):
             meta = store.metadata()

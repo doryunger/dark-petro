@@ -26,8 +26,8 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
         if not cfg.bucket:
             raise SystemExit("STS_BUCKET is not set")
         s3 = s3_client(cfg)
-        S.sync_parquets(s3, cfg.bucket, cfg.findings_prefix, cfg.mirror, cfg.state_file)
-    inputs = F.local_inputs(cfg.mirror, cfg.findings_prefix)
+        S.sync_parquets(s3, cfg.bucket, cfg.prefixes, cfg.mirror, cfg.state_file)
+    inputs = F.local_inputs(cfg.mirror, *cfg.prefixes)
     digest = F.input_hash(inputs)
     live = B.current_manifest(cfg)
     if not force and live and live.get("input_hash") == digest:
@@ -36,21 +36,22 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
             on_disk = {path.relative_to(cfg.mirror).as_posix() for path in (cfg.mirror / "captures").rglob("*.png")}
             _, refreshed = S.sync_captures(s3, cfg.bucket, on_disk, cfg.mirror, cfg.captures_state_file)
         return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs), "captures_refreshed": refreshed}
-    rows, dups = F.dedupe(B.read_rows(cfg.mirror, sorted(inputs)))
-    total = len(rows)
-    rows = F.visible(rows)
-    if not rows:
+    rows, dups = F.dedupe(B.read_rows(cfg.mirror, sorted(k for k in inputs if k.startswith(cfg.findings_prefix))))
+    sanctioned, sanctioned_dups = F.dedupe(B.read_rows(cfg.mirror, sorted(k for k in inputs if k.startswith(cfg.sanctioned_prefix))))
+    total = len(rows) + len(sanctioned)
+    rows, sanctioned = F.visible(rows), F.visible(sanctioned)
+    if not rows and not sanctioned:
         return {"result": "skipped_empty", "inputs": len(inputs), "build_id": live and live["build_id"]}
-    if dups:
-        log.warning("%d duplicate finding_id rows dropped", dups)
-    wanted = F.captures(rows)
+    if dups or sanctioned_dups:
+        log.warning("%d duplicate finding_id rows dropped", dups + sanctioned_dups)
+    wanted = F.captures(rows) | F.captures(sanctioned)
     missing = S.sync_captures(s3, cfg.bucket, wanted, cfg.mirror, cfg.captures_state_file)[0] if s3 else sorted(k for k in wanted if not (cfg.mirror / k).exists())
     if missing:
         log.warning("%d captures referenced but not on S3, e.g. %s", len(missing), missing[0])
-    out = B.build(cfg, inputs, rows, missing)
+    out = B.build(cfg, inputs, rows, sanctioned, missing)
     S.prune_captures(cfg.mirror, wanted)
     B.prune_builds(cfg)
-    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "hidden_rejected": total - len(rows), "missing_captures": len(missing)}
+    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "sanctioned": len(sanctioned), "hidden_rejected": total - len(rows) - len(sanctioned), "missing_captures": len(missing)}
 
 
 def run_once(cfg: Config, force: bool, offline: bool, trigger: str) -> dict:

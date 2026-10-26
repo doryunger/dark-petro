@@ -11,7 +11,7 @@ SETTLE_S = 10
 SETTLE_MAX_S = 60
 
 
-def parse(body: str, prefix: str) -> tuple[str, list[str]]:
+def parse(body: str, prefix: str | tuple[str, ...]) -> tuple[str, list[str]]:
     try:
         msg = json.loads(body)
     except ValueError:
@@ -59,7 +59,7 @@ def listen(cfg, run_once, queue_url: str) -> int:
             kinds = {"test": [], "publish": [], "ignore": []}
             keys = []
             for m in batch:
-                kind, k = parse(m["Body"], cfg.findings_prefix)
+                kind, k = parse(m["Body"], cfg.prefixes)
                 kinds[kind].append(m)
                 keys += k
             delete(sqs, queue_url, kinds["test"] + kinds["ignore"])

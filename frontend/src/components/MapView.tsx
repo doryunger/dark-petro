@@ -1,15 +1,15 @@
 import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, type LngLatBounds } from "mapbox-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import hotSpots from "../data/hot_spots.json";
-import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM } from "../lib/constants";
+import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
 import { toEntry, uniqueEntries } from "../lib/entries";
 import { tileUrl } from "../lib/filters";
 import { featureBounds, shouldFly, topCenter } from "../lib/geo";
-import { addPairImages } from "../lib/icons";
-import { HOT_SPOT_LINE, iconImage, pairsLayer, sortKey } from "../lib/layers";
+import { addMapImages } from "../lib/icons";
+import { HOT_SPOT_LINE, iconImage, sortKey, symbolLayer } from "../lib/layers";
 import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
-import type { Entry, Filter, Order, TileFeature } from "../lib/types";
+import type { Entry, Filter, Order, Tab, TileFeature } from "../lib/types";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const STYLE = import.meta.env.VITE_MAPBOX_STYLE;
@@ -20,6 +20,7 @@ export interface MapHandle {
 }
 
 interface Props {
+  tab: Tab;
   filter: Filter;
   order: Order;
   selectedId: string | null;
@@ -30,13 +31,14 @@ interface Props {
   children?: ReactNode;
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const queryBounds = useRef<LngLatBounds | null>(null);
-  const latest = useRef({ filter, order, selectedId, onSelect, onEntries, onError, onSettled });
+  const signature = useRef("");
+  const latest = useRef({ tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
   const [showBack, setShowBack] = useState(false);
-  latest.current = { filter, order, selectedId, onSelect, onEntries, onError, onSettled };
+  latest.current = { tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
 
   useImperativeHandle(ref, () => ({
     flyTo(entry) {
@@ -79,27 +81,30 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
     });
 
     const setup = async () => {
-      await addPairImages(map);
+      await addMapImages(map);
       if (!map.getSource("hot-spots")) map.addSource("hot-spots", { type: "geojson", data: hotSpots });
       if (!map.getLayer(HOT_SPOT_LINE.id)) map.addLayer(HOT_SPOT_LINE);
-      if (!map.getSource("pairs")) {
-        map.addSource("pairs", { type: "vector", tiles: [tileUrl(window.location.origin, latest.current.filter)], minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+      for (const id of TABS) {
+        const { tab: active, filter: current, order: sort, selectedId: picked } = latest.current;
+        if (!map.getSource(id)) {
+          map.addSource(id, { type: "vector", tiles: [tileUrl(window.location.origin, current, id)], minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+        }
+        if (!map.getLayer(id)) map.addLayer(symbolLayer(id, { order: sort, selectedId: id === active ? picked : null, active: id === active }));
       }
-      if (!map.getLayer("pairs")) map.addLayer(pairsLayer(latest.current));
     };
     map.on("style.load", setup);
 
-    let signature = "";
     let frame = 0;
     let settled = false;
     const refresh = () => {
       const done = settled;
       settled = false;
-      if (!map.getLayer("pairs")) return;
-      const entries = uniqueEntries(map.queryRenderedFeatures({ layers: ["pairs"] }) as unknown as TileFeature[]);
+      const layer = latest.current.tab;
+      if (!map.getLayer(layer)) return;
+      const entries = uniqueEntries(map.queryRenderedFeatures({ layers: [layer] }) as unknown as TileFeature[], layer);
       const next = entries.map((e) => e.id).sort().join("|");
-      if (next !== signature) {
-        signature = next;
+      if (next !== signature.current) {
+        signature.current = next;
         latest.current.onEntries(entries);
       }
       if (done) latest.current.onSettled();
@@ -130,27 +135,29 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
       popup.remove();
     };
     map.on("mousemove", (e) => {
-      if (!map.getLayer("pairs")) return;
-      const found = map.queryRenderedFeatures(e.point, { layers: ["pairs"] })[0];
+      const layer = latest.current.tab;
+      if (!map.getLayer(layer)) return;
+      const found = map.queryRenderedFeatures(e.point, { layers: [layer] })[0];
       if (!found) return hide();
       map.getCanvas().style.cursor = "pointer";
       const tile = found as unknown as TileFeature;
       if (tile.properties.id === hoverId) return;
       hoverId = tile.properties.id;
-      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(toEntry(tile))).addTo(map);
+      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(toEntry(tile, layer))).addTo(map);
     });
     map.on("mouseout", hide);
     map.on("click", (e) => {
-      if (!map.getLayer("pairs")) return;
-      const feature = map.queryRenderedFeatures(e.point, { layers: ["pairs"] })[0];
-      if (feature) latest.current.onSelect(toEntry(feature as unknown as TileFeature));
+      const layer = latest.current.tab;
+      if (!map.getLayer(layer)) return;
+      const feature = map.queryRenderedFeatures(e.point, { layers: [layer] })[0];
+      if (feature) latest.current.onSelect(toEntry(feature as unknown as TileFeature, layer));
     });
 
     let lastError = 0;
     let fellBack = false;
     map.on("error", (e) => {
       const now = Date.now();
-      if ((e as { sourceId?: string }).sourceId === "pairs") {
+      if (TABS.includes((e as { sourceId?: string }).sourceId as Tab)) {
         if (now - lastError > ERROR_GAP_MS) latest.current.onError("Could not load the map data. Check the connection and try again.");
         lastError = now;
       } else if (TOKEN && !fellBack && !map.isStyleLoaded()) {
@@ -170,16 +177,31 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ filter, order, s
   }, []);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource("pairs") as { setTiles?: (tiles: string[]) => void } | undefined;
-    if (source?.setTiles) source.setTiles([tileUrl(window.location.origin, filter)]);
+    for (const id of TABS) {
+      const source = mapRef.current?.getSource(id) as { setTiles?: (tiles: string[]) => void } | undefined;
+      if (source?.setTiles) source.setTiles([tileUrl(window.location.origin, filter, id)]);
+    }
   }, [filter]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getLayer("pairs")) return;
-    map.setLayoutProperty("pairs", "icon-image", iconImage(selectedId));
-    map.setLayoutProperty("pairs", "symbol-sort-key", sortKey(order, selectedId));
-  }, [order, selectedId]);
+    if (!map) return;
+    signature.current = "";
+    for (const id of TABS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", id === tab ? "visible" : "none");
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const id of TABS) {
+      if (!map.getLayer(id)) continue;
+      const picked = id === tab ? selectedId : null;
+      map.setLayoutProperty(id, "icon-image", iconImage(picked, id));
+      map.setLayoutProperty(id, "symbol-sort-key", sortKey(order, picked));
+    }
+  }, [order, selectedId, tab]);
 
   const back = () => {
     const map = mapRef.current;

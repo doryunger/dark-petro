@@ -1,10 +1,12 @@
 import type { ExpressionSpecification, LineLayerSpecification, SymbolLayerSpecification } from "mapbox-gl";
-import type { Order } from "./types";
+import type { Order, Tab } from "./types";
 
 export const ICON_SIZE: ExpressionSpecification = ["interpolate", ["linear"], ["zoom"], 4, 0.3, 10, 0.5, 14, 0.8, 16, 1];
 
-export function iconImage(selectedId: string | null | undefined): ExpressionSpecification {
-  return ["case", ["==", ["get", "id"], selectedId ?? ""], "pair-selected", ["==", ["get", "sanctioned"], true], "pair-sanctioned", "pair"];
+export function iconImage(selectedId: string | null | undefined, tab: Tab = "pairs"): ExpressionSpecification {
+  const selected: ExpressionSpecification = ["==", ["get", "id"], selectedId ?? ""];
+  if (tab === "sanctioned") return ["case", selected, "vessel-selected", "vessel-sanctioned"];
+  return ["case", selected, "pair-selected", ["==", ["get", "sanctioned"], true], "pair-sanctioned", "pair"];
 }
 
 export function sortKey(order: Order, selectedId: string | null | undefined): ExpressionSpecification {
@@ -12,16 +14,17 @@ export function sortKey(order: Order, selectedId: string | null | undefined): Ex
   return ["case", ["==", ["get", "id"], selectedId ?? ""], 1e13, ["*", sign, ["get", "t"]]];
 }
 
-export function pairsLayer({ order, selectedId }: { order: Order; selectedId: string | null | undefined }): SymbolLayerSpecification {
+export function symbolLayer(tab: Tab, { order, selectedId, active }: { order: Order; selectedId: string | null | undefined; active: boolean }): SymbolLayerSpecification {
   return {
-    id: "pairs",
+    id: tab,
     type: "symbol",
-    source: "pairs",
-    "source-layer": "pairs",
+    source: tab,
+    "source-layer": tab,
     slot: "top",
     paint: { "icon-emissive-strength": 1 },
     layout: {
-      "icon-image": iconImage(selectedId),
+      visibility: active ? "visible" : "none",
+      "icon-image": iconImage(selectedId, tab),
       "icon-size": ICON_SIZE,
       "icon-rotate": ["coalesce", ["get", "yaw"], 0],
       "icon-rotation-alignment": "map",

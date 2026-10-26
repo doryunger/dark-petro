@@ -16,6 +16,13 @@ class Parse(unittest.TestCase):
         self.assertEqual(parse(event("sts/21-10-2026/off_sohar/s2.parquet"), "sts/"), ("publish", ["sts/21-10-2026/off_sohar/s2.parquet"]))
         self.assertEqual(parse(event("sts/a+b%2Bc.parquet"), "sts/"), ("publish", ["sts/a b+c.parquet"]))
 
+    def test_publish_in_either_prefix(self):
+        both = ("sts/", "sanctioned/")
+        self.assertEqual(parse(event("sanctioned/21-10-2026/off_sohar/s2.parquet"), both), ("publish", ["sanctioned/21-10-2026/off_sohar/s2.parquet"]))
+        self.assertEqual(parse(event("sts/21-10-2026/off_sohar/s2.parquet"), both)[0], "publish")
+        self.assertEqual(parse(event("sanctioned/21-10-2026/off_sohar/s2.parquet"), "sts/")[0], "ignore")
+        self.assertEqual(parse(event("hotspots/x.parquet"), both)[0], "ignore")
+
     def test_ignores_other_keys_and_events(self):
         self.assertEqual(parse(event("captures/x.png"), "sts/")[0], "ignore")
         self.assertEqual(parse(event("sts/x.parquet", "ObjectRemoved:Delete"), "sts/")[0], "ignore")

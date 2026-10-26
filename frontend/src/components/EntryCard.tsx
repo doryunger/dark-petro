@@ -1,5 +1,5 @@
 import { formatDate } from "../lib/dates";
-import { hotSpotLabel } from "../lib/entries";
+import { entryIconClass, hotSpotLabel } from "../lib/entries";
 import type { Entry } from "../lib/types";
 
 interface Props {
@@ -24,7 +24,7 @@ export default function EntryCard({ entry, selected, top, onSelect }: Props) {
         }
       }}
     >
-      <span className={`entry-icon${entry.sanctioned ? " entry-icon-sanctioned" : ""}`} />
+      <span className={entryIconClass(entry)} />
       <div className="entry-id">{entry.shortId}</div>
       <div className="entry-meta">
         <span className="entry-area">{hotSpotLabel(entry.hotSpot)}</span>

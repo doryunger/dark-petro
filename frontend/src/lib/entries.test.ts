@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import { entryIconClass, hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
 import type { Entry, TileFeature } from "./types";
 
 const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
@@ -25,6 +25,26 @@ describe("entries", () => {
     expect(e).toMatchObject({ shortId: "56045-272349", date: "2026-10-21", hotSpot: "off_sohar", source: "s2", sanctioned: true, image: "captures/a.png", lon: 57.5973, lat: 24.6244 });
     expect(e.vessels[0]).toEqual({ name: "ONE", flag: "PA", imo: "9123456", sanctioned: false, known: true });
     expect(e.vessels[1]).toEqual({ name: null, flag: "KM", imo: null, sanctioned: true, known: false });
+  });
+
+  it("reads a sanctioned vessel as one sanctioned vessel, whatever the tile says about pairs", () => {
+    const single = feature("s1_20261019T141603_w0-44977-274982", { sanctioned: undefined, v1_name: "NESO", v1_flag: "ST", v1_imo: "9257149", v1_sanctioned: undefined, v2_flag: undefined, v2_sanctioned: undefined });
+    const e = toEntry(single, "sanctioned");
+    expect(e).toMatchObject({ tab: "sanctioned", shortId: "44977-274982", sanctioned: true, source: "s2" });
+    expect(e.vessels).toEqual([{ name: "NESO", flag: "ST", imo: "9257149", sanctioned: true, known: true }]);
+    expect(toEntry(feature("s2_1_a")).tab).toBe("pairs");
+    expect(toEntry(feature("s2_1_a")).vessels).toHaveLength(2);
+  });
+
+  it("draws a pair icon or a single-vessel icon, red when sanctioned", () => {
+    expect(entryIconClass({ tab: "pairs", sanctioned: false })).toBe("entry-icon");
+    expect(entryIconClass({ tab: "pairs", sanctioned: true })).toBe("entry-icon entry-icon-sanctioned");
+    expect(entryIconClass({ tab: "sanctioned", sanctioned: true })).toBe("entry-icon entry-icon-vessel entry-icon-sanctioned");
+  });
+
+  it("keeps one entry per vessel in the sanctioned tab too", () => {
+    const list = uniqueEntries([feature("s2_1_a"), feature("s2_1_a")], "sanctioned");
+    expect(list.map((e) => [e.id, e.tab])).toEqual([["s2_1_a", "sanctioned"]]);
   });
 
   it("takes the exact position from the attributes, and the tile geometry only when they are missing", () => {

@@ -1,4 +1,5 @@
 export type Order = "latest" | "oldest";
+export type Tab = "pairs" | "sanctioned";
 
 export interface Meta {
   min_date: string;
@@ -22,6 +23,7 @@ export interface Vessel {
 
 export interface Entry {
   id: string;
+  tab: Tab;
   shortId: string;
   date: string;
   t: number;
@@ -31,7 +33,7 @@ export interface Entry {
   image: string | null;
   lon: number;
   lat: number;
-  vessels: [Vessel, Vessel];
+  vessels: Vessel[];
 }
 
 export interface TileProperties {
