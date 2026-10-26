@@ -16,10 +16,12 @@ log = logging.getLogger(__name__)
 
 MAX_ZOOM = 14
 TILE_PATH = re.compile(r"^/tiles/(?:(sanctioned)/)?(\d{1,2})/(\d{1,5})/(\d{1,5})\.mvt$")
+TRACK_PATH = re.compile(r"^/tracks/(\w{1,20})$")
 DATE_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ALLOWED_PARAMS = {"from", "to", "source"}
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 TILE_MARGIN = 0.1
+TILE_REVISION = 3
 
 TILE_SQL = """
 SELECT ST_AsMVT({%PROPS%}, '%LAYER%')
@@ -30,8 +32,12 @@ FROM (
     SELECT *,
       strftime(capture_utc, '%Y-%m-%d') AS day,
       epoch(capture_utc)::BIGINT AS t%DERIVED%
-    FROM read_parquet(?)
-    WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?{extra}
+    FROM (
+      SELECT *%WINDOW%
+      FROM read_parquet(?)
+      WHERE true{extra}
+    )
+    WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?%HEAD%
   )
 )
 WHERE geom IS NOT NULL
@@ -52,13 +58,26 @@ PAIR_DERIVED = """,
 SANCTIONED_PROPS = """
   'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
   'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
-  'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo
+  'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo, 'n': n
 """
 
+SANCTIONED_WINDOW = """,
+      CASE WHEN vessel_imo IS NULL THEN 1 ELSE count(*) OVER (PARTITION BY vessel_imo) END AS n,
+      CASE WHEN vessel_imo IS NULL THEN 1 ELSE row_number() OVER (PARTITION BY vessel_imo ORDER BY capture_utc DESC, finding_id) END AS head_rank"""
+
 LAYERS = {
-    "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED)},
-    "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "")},
+    "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED).replace("%WINDOW%", "").replace("%HEAD%", "")},
+    "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "").replace("%WINDOW%", SANCTIONED_WINDOW).replace("%HEAD%", " AND head_rank = 1")},
 }
+
+
+TRACK_SQL = """
+SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png, yaw,
+  round(lon, 6), round(lat, 6), vessel_name, vessel_flag, vessel_imo
+FROM read_parquet(?)
+WHERE vessel_imo = ?{extra}
+ORDER BY capture_utc DESC, finding_id
+"""
 
 
 class BadRequest(Exception):
@@ -132,8 +151,22 @@ def parse_filters(query: str, known_sources: list[str]) -> dict:
     return out
 
 
+def filter_clause(filters: dict) -> tuple[str, list]:
+    extra, args = "", []
+    if filters["from"]:
+        extra += " AND capture_utc >= ?::TIMESTAMPTZ"
+        args.append(f"{filters['from'].isoformat()}T00:00:00+00:00")
+    if filters["to"]:
+        extra += " AND capture_utc < ?::TIMESTAMPTZ"
+        args.append(f"{(filters['to'] + timedelta(days=1)).isoformat()}T00:00:00+00:00")
+    if filters["sources"]:
+        extra += " AND list_contains(?, source)"
+        args.append(filters["sources"])
+    return extra, args
+
+
 def etag_for(build_id: str, path: str, query: str) -> str:
-    key = f"{build_id}|{path}|{'&'.join(sorted(query.split('&'))) if query else ''}"
+    key = f"{TILE_REVISION}|{build_id}|{path}|{'&'.join(sorted(query.split('&'))) if query else ''}"
     return '"' + hashlib.sha1(key.encode()).hexdigest()[:20] + '"'
 
 
@@ -161,24 +194,28 @@ class Store:
             return None
         return {"min_date": span[0], "max_date": span[1], "sources": known_sources(m)}
 
+    def track(self, imo: str, filters: dict) -> list[dict]:
+        source = self.cfg.current / "sanctioned.parquet"
+        if not source.exists():
+            return []
+        extra, args = filter_clause(filters)
+        cur = self.con.cursor()
+        try:
+            rows = cur.execute(TRACK_SQL.replace("{extra}", extra), [str(source), imo, *args]).fetchall()
+        finally:
+            cur.close()
+        keys = ("id", "date", "t", "hot_spot", "source", "image", "yaw", "lon", "lat", "name", "flag", "imo")
+        return [dict(zip(keys, r)) for r in rows]
+
     def tile(self, layer: str, z: int, x: int, y: int, filters: dict) -> bytes:
         source = self.cfg.current / LAYERS[layer]["file"]
         if not source.exists():
             return b""
         west, south, east, north = padded_bounds(z, x, y)
-        extra, args = "", []
-        if filters["from"]:
-            extra += " AND capture_utc >= ?::TIMESTAMPTZ"
-            args.append(f"{filters['from'].isoformat()}T00:00:00+00:00")
-        if filters["to"]:
-            extra += " AND capture_utc < ?::TIMESTAMPTZ"
-            args.append(f"{(filters['to'] + timedelta(days=1)).isoformat()}T00:00:00+00:00")
-        if filters["sources"]:
-            extra += " AND list_contains(?, source)"
-            args.append(filters["sources"])
+        extra, args = filter_clause(filters)
         cur = self.con.cursor()
         try:
-            row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra), [z, x, y, str(source), west, east, south, north, *args]).fetchone()
+            row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra), [z, x, y, str(source), *args, west, east, south, north]).fetchone()
         finally:
             cur.close()
         return bytes(row[0]) if row and row[0] else b""
@@ -228,6 +265,8 @@ def make_handler(store: Store):
                     return self.tile(path, parts.query)
                 if path == "/metadata":
                     return self.metadata()
+                if path.startswith("/tracks/"):
+                    return self.track(path, parts.query)
                 if path.startswith("/captures/"):
                     return self.capture(path)
                 return self.app(path)
@@ -252,6 +291,16 @@ def make_handler(store: Store):
                 self.end_headers()
                 return
             self.send_bytes(HTTPStatus.OK, store.tile(layer, z, x, y, filters), MVT_TYPE, {"ETag": etag, "Cache-Control": "no-cache"})
+
+        def track(self, path: str, query: str):
+            manifest = store.manifest()
+            if not manifest:
+                return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
+            m = TRACK_PATH.match(path)
+            if not m:
+                raise BadRequest("not a track path")
+            filters = parse_filters(query, known_sources(manifest))
+            self.send_json(HTTPStatus.OK, {"imo": m.group(1), "points": store.track(m.group(1), filters)})
 
         def metadata(self):
             meta = store.metadata()

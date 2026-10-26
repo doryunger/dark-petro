@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { formatDate, formatTime } from "../lib/dates";
-import { hotSpotLabel, sourceName } from "../lib/entries";
+import { entryTitle, hotSpotLabel, sourceName } from "../lib/entries";
 import type { Entry, Vessel as VesselData } from "../lib/types";
 
-function Vessel({ number, vessel }: { number?: number; vessel: VesselData }) {
+function Vessel({ number, vessel }: { number: number; vessel: VesselData }) {
   return (
     <div className="detail-row">
       <span className="detail-label">
-        {number === undefined ? (
-          "Vessel"
-        ) : (
-          <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
-        )}
+        <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
       </span>
       <span className="detail-value">
         {vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
@@ -48,7 +44,7 @@ export default function Details({ entry, onClose }: { entry: Entry | null; onClo
     <section className="details">
       <header className="details-header">
         <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />
-        <h2 className="details-id">{entry.shortId}</h2>
+        <h2 className="details-id">{entryTitle(entry)}</h2>
         <button className="details-close" type="button" aria-label="Close" onClick={onClose}>
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
             <path className="close-outline" d="M3 3L13 13M13 3L3 13" />
@@ -60,9 +56,15 @@ export default function Details({ entry, onClose }: { entry: Entry | null; onClo
         <Capture key={entry.id} image={entry.image} alt={entry.tab === "sanctioned" ? "Capture of the vessel" : "Capture of the pair"} />
         <div className="details-source">Source: {sourceName(entry.source)}</div>
         <div className="details-body">
-          {entry.vessels.map((vessel, i) => (
-            <Vessel key={i} number={entry.vessels.length > 1 ? i + 1 : undefined} vessel={vessel} />
-          ))}
+          {entry.tab === "sanctioned" ? (
+            <>
+              <Row label="Detection ID" value={entry.shortId} />
+              {entry.vessels[0]?.flag && <Row label="Flag" value={entry.vessels[0].flag} />}
+              {entry.vessels[0]?.imo && <Row label="IMO" value={entry.vessels[0].imo} />}
+            </>
+          ) : (
+            entry.vessels.map((vessel, i) => <Vessel key={i} number={i + 1} vessel={vessel} />)
+          )}
           <Row label="Date" value={formatDate(entry.date)} />
           <Row label="Time" value={formatTime(entry.t)} />
           <Row label="Area" value={hotSpotLabel(entry.hotSpot)} />

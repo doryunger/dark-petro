@@ -26,8 +26,13 @@ describe("icons", () => {
     expect(vesselSvg({ fill: "#fff", stroke: "#000", orientation: 90, width: 39, height: 168 })).toContain('width="39"');
   });
 
-  it("has two single-vessel images: red with a black outline, cyan with a white one", () => {
-    expect(VESSEL_IMAGES).toEqual({ "vessel-sanctioned": { fill: "#d64545", stroke: "#000000" }, "vessel-selected": { fill: "#4fd0e4", stroke: "#ffffff" } });
+  it("has four single-vessel images: red and a lighter red for older detections with a black outline, cyan and grey with a white one", () => {
+    expect(VESSEL_IMAGES).toEqual({
+      "vessel-sanctioned": { fill: "#d64545", stroke: "#000000" },
+      "vessel-selected": { fill: "#4fd0e4", stroke: "#ffffff" },
+      "vessel-picked": { fill: "#9aa5b0", stroke: "#ffffff" },
+      "vessel-history": { fill: "#e88f8f", stroke: "#000000" },
+    });
   });
 
   it("has three images: yellow and red with a black outline, cyan with a white one", () => {

@@ -4,6 +4,7 @@ import os
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from datetime import date, datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -103,6 +104,12 @@ class Parsing(unittest.TestCase):
         self.assertEqual(a, V.etag_for("b1", "/tiles/0/0/0.mvt", "to=2026-10-02&from=2026-10-01"))
         self.assertNotEqual(a, V.etag_for("b2", "/tiles/0/0/0.mvt", "from=2026-10-01&to=2026-10-02"))
 
+    def test_etag_changes_with_the_tile_format_so_a_cached_tile_of_an_older_format_is_not_revalidated(self):
+        a = V.etag_for("b1", "/tiles/0/0/0.mvt", "")
+        with mock.patch.object(V, "TILE_REVISION", V.TILE_REVISION + 1):
+            self.assertNotEqual(a, V.etag_for("b1", "/tiles/0/0/0.mvt", ""))
+        self.assertEqual(a, V.etag_for("b1", "/tiles/0/0/0.mvt", ""))
+
     def test_tile_bounds(self):
         west, south, east, north = V.tile_bounds(0, 0, 0)
         self.assertEqual((west, east), (-180.0, 180.0))
@@ -181,10 +188,10 @@ class Serving(unittest.TestCase):
         self.assertEqual([f["id"] for f in mvt.decode(body)], ["s2_20261022T060000_3"])
 
     def test_sanctioned_tile_is_its_own_layer_with_the_vessel_attributes(self):
-        status, headers, body = self.get("/tiles/sanctioned/0/0/0.mvt")
+        status, headers, body = self.get("/tiles/sanctioned/0/0/0.mvt?to=2026-10-13")
         self.assertEqual((status, headers["Content-Type"]), (200, V.MVT_TYPE))
         features = {f["id"]: f for f in mvt.decode(body)}
-        self.assertEqual(set(features), {"s1_20261012T060000_w0-1", "s1_20261021T060000_w0-2"})
+        self.assertEqual(set(features), {"s1_20261012T060000_w0-1"})
         one = features["s1_20261012T060000_w0-1"]
         self.assertEqual((one["date"], one["hot_spot"], one["source"], one["image"]), ("2026-10-12", "fujairah_outer", "s1", "captures/s1.png"))
         self.assertEqual((one["v1_name"], one["v1_flag"], one["v1_imo"]), ("SANCTIONED 1", "ST", "9257149"))
@@ -192,7 +199,20 @@ class Serving(unittest.TestCase):
         self.assertIn("t", one)
         self.assertNotIn("v2_name", one)
         self.assertEqual(one["yaw"], 45.0)
-        self.assertNotIn("yaw", features["s1_20261021T060000_w0-2"])
+        _, _, newest = self.get("/tiles/sanctioned/0/0/0.mvt")
+        self.assertNotIn("yaw", mvt.decode(newest)[0])
+
+    def test_a_vessel_seen_twice_is_one_icon_on_the_map_its_newest_detection_under_the_filters(self):
+        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt")
+        self.assertEqual([f["id"] for f in mvt.decode(body)], ["s1_20261021T060000_w0-2"])
+        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt?to=2026-10-20")
+        self.assertEqual([f["id"] for f in mvt.decode(body)], ["s1_20261012T060000_w0-1"])
+
+    def test_a_sanctioned_tile_counts_the_vessel_detections_under_the_filters(self):
+        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt")
+        self.assertEqual({f["id"]: f["n"] for f in mvt.decode(body)}, {"s1_20261021T060000_w0-2": 2})
+        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt?from=2026-10-20&to=2026-10-22")
+        self.assertEqual({f["id"]: f["n"] for f in mvt.decode(body)}, {"s1_20261021T060000_w0-2": 1})
 
     def test_pairs_and_sanctioned_vessels_stay_apart(self):
         _, _, pairs = self.get("/tiles/0/0/0.mvt")
@@ -203,6 +223,27 @@ class Serving(unittest.TestCase):
         self.assertEqual([f["id"] for f in mvt.decode(body)], ["s1_20261021T060000_w0-2"])
         _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt?source=s2")
         self.assertEqual(mvt.decode(body), [])
+
+    def test_a_vessel_track_lists_its_captures_newest_first(self):
+        status, headers, body = self.get("/tracks/9257149")
+        self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+        track = json.loads(body)
+        self.assertEqual(track["imo"], "9257149")
+        self.assertEqual([p["id"] for p in track["points"]], ["s1_20261021T060000_w0-2", "s1_20261012T060000_w0-1"])
+        self.assertEqual(track["points"][0], {"id": "s1_20261021T060000_w0-2", "date": "2026-10-21", "t": 1792562400, "hot_spot": "fujairah_outer", "source": "s1", "image": "captures/s2.png", "yaw": None, "lon": 56.502, "lat": 25.102, "name": "SANCTIONED 2", "flag": "ST", "imo": "9257149"})
+        self.assertEqual(track["points"][1]["yaw"], 45.0)
+
+    def test_a_vessel_track_follows_the_filters_and_is_empty_for_an_unknown_vessel(self):
+        _, _, body = self.get("/tracks/9257149?from=2026-10-20&to=2026-10-22&source=s1")
+        self.assertEqual([p["id"] for p in json.loads(body)["points"]], ["s1_20261021T060000_w0-2"])
+        _, _, body = self.get("/tracks/9257149?source=s2")
+        self.assertEqual(json.loads(body)["points"], [])
+        _, _, body = self.get("/tracks/1234567")
+        self.assertEqual(json.loads(body)["points"], [])
+
+    def test_bad_track_requests(self):
+        for path in ("/tracks/", "/tracks/a-b", "/tracks/9257149/x", "/tracks/9257149?source=s9", "/tracks/9257149?x=1", "/tracks/9257149?from=x"):
+            self.assertEqual(self.get(path)[0], 400, path)
 
     def test_a_sanctioned_tile_elsewhere_is_empty(self):
         _, _, body = self.get("/tiles/sanctioned/6/0/0.mvt")
@@ -245,6 +286,23 @@ class Serving(unittest.TestCase):
 
 
 @unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")
+class SanctionedCounts(unittest.TestCase):
+    def test_the_count_covers_detections_outside_the_tile_and_respects_the_dates(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            far = sanctioned_finding(2, "s2", 11, lat=-30.0, lon=-60.0)
+            make_data(root, [finding(1, "s1", 10)], [sanctioned_finding(1, "s1", 12, lat=25.0, lon=56.5), far, sanctioned_finding(3, "s1", 14, lat=25.1, lon=56.6, vessel_imo="1111111")])
+            store = V.Store(make_config(root))
+            everything = {"from": None, "to": None, "sources": None}
+            near = {f["id"]: f["n"] for f in mvt.decode(store.tile("sanctioned", 3, 5, 3, everything))}
+            self.assertEqual(near, {"s1_20261012T060000_w0-1": 2, "s1_20261014T060000_w0-3": 1})
+            late = dict(everything, **{"from": date(2026, 10, 12)})
+            self.assertEqual({f["n"] for f in mvt.decode(store.tile("sanctioned", 3, 5, 3, late))}, {1})
+            only_far = {f["id"] for f in mvt.decode(store.tile("sanctioned", 3, 2, 4, dict(everything, to=date(2026, 10, 11))))}
+            self.assertEqual(only_far, {"s2_20261011T060000_w0-2"})
+
+
+@unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")
 class BuildWithoutSanctioned(unittest.TestCase):
     def test_a_build_from_before_the_tab_gives_an_empty_tile(self):
         with tempfile.TemporaryDirectory() as d:
@@ -253,6 +311,7 @@ class BuildWithoutSanctioned(unittest.TestCase):
             store = V.Store(make_config(root))
             self.assertEqual(store.tile("sanctioned", 0, 0, 0, {"from": None, "to": None, "sources": None}), b"")
             self.assertTrue(store.tile("pairs", 0, 0, 0, {"from": None, "to": None, "sources": None}))
+            self.assertEqual(store.track("9257149", {"from": None, "to": None, "sources": None}), [])
 
 
 if __name__ == "__main__":

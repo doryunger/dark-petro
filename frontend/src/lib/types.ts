@@ -34,6 +34,32 @@ export interface Entry {
   lon: number;
   lat: number;
   vessels: Vessel[];
+  detections?: number;
+}
+
+export interface TrackPoint {
+  id: string;
+  date: string;
+  t: number;
+  hot_spot: string;
+  source: string;
+  image: string | null;
+  yaw: number | null;
+  lon: number;
+  lat: number;
+  name: string | null;
+  flag: string | null;
+  imo: string | null;
+}
+
+export interface TrackLine {
+  type: "FeatureCollection";
+  features: { type: "Feature"; properties: Record<string, never>; geometry: { type: "LineString"; coordinates: LngLat[] } }[];
+}
+
+export interface HistoryCollection {
+  type: "FeatureCollection";
+  features: { type: "Feature"; properties: { id: string; yaw?: number }; geometry: { type: "Point"; coordinates: LngLat } }[];
 }
 
 export interface TileProperties {

@@ -1,9 +1,11 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
-import { REVEAL_MS, ROW_HEIGHT_REM, ROW_TOP_REM } from "../lib/constants";
+import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { ENTRY_HEIGHT_REM, REVEAL_MS, ROW_HEIGHT_REM, ROW_TOP_REM } from "../lib/constants";
+import { historyHeight } from "../lib/groups";
 import { remPx } from "../lib/units";
-import { revealScrollTop, useVirtualRows } from "../lib/virtual";
+import { revealScrollTop, rowOffset, useVirtualRows } from "../lib/virtual";
 import type { Entry, Order, Tab } from "../lib/types";
 import EntryCard from "./EntryCard";
+import History from "./History";
 import Tabs from "./Tabs";
 
 export interface ReelHandle {
@@ -15,16 +17,23 @@ interface Props {
   onTab: (tab: Tab) => void;
   entries: Entry[];
   selectedId: string | null;
+  openId?: string | null;
+  history?: Entry[];
+  pickedId?: string | null;
+  onPick?: (entry: Entry) => void;
   order: Order;
   onOrder: (order: Order) => void;
   onSelect: (entry: Entry) => void;
 }
 
-const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, selectedId, order, onOrder, onSelect }, ref) {
+const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, selectedId, openId = null, history = [], pickedId = null, onPick, order, onOrder, onSelect }, ref) {
   const scroller = useRef<HTMLDivElement>(null);
   const rem = remPx();
   const rowHeight = ROW_HEIGHT_REM * rem;
-  const { start, end } = useVirtualRows(scroller, entries.length, rowHeight);
+  const openIndex = openId ? entries.findIndex((e) => e.id === openId) : -1;
+  const historyRem = openIndex >= 0 ? historyHeight(history.length || (entries[openIndex].detections ?? 1) - 1) : 0;
+  const gap = openIndex >= 0 ? { index: openIndex, height: historyRem * rem } : undefined;
+  const { start, end } = useVirtualRows(scroller, entries.length, rowHeight, gap);
 
   const pending = useRef<{ id: string; until: number } | null>(null);
 
@@ -33,8 +42,8 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
     const wanted = pending.current;
     if (!el || !wanted || Date.now() > wanted.until) return;
     const index = entries.findIndex((e) => e.id === wanted.id);
-    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, rowHeight, el.clientHeight - ROW_TOP_REM * rem);
-  }, [entries, rowHeight, rem]);
+    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, rowHeight, el.clientHeight - ROW_TOP_REM * rem, gap);
+  }, [entries, rowHeight, rem, gap?.index, gap?.height]);
 
   useEffect(apply, [apply]);
 
@@ -74,10 +83,16 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
         {entries.length === 0 ? (
           <p className="empty">No findings in this view.</p>
         ) : (
-          <div className="entries-inner" style={{ height: `${ROW_TOP_REM + entries.length * ROW_HEIGHT_REM}rem` }}>
-            {entries.slice(start, end).map((entry, i) => (
-              <EntryCard key={entry.id} entry={entry} selected={entry.id === selectedId} top={`${ROW_TOP_REM + (start + i) * ROW_HEIGHT_REM}rem`} onSelect={onSelect} />
-            ))}
+          <div className="entries-inner" style={{ height: `${ROW_TOP_REM + entries.length * ROW_HEIGHT_REM + historyRem}rem` }}>
+            {entries.slice(start, end).map((entry, i) => {
+              const top = ROW_TOP_REM + rowOffset(start + i, ROW_HEIGHT_REM, openIndex >= 0 ? { index: openIndex, height: historyRem } : undefined);
+              return (
+                <Fragment key={entry.id}>
+                  <EntryCard entry={entry} selected={entry.id === selectedId} open={entry.id === openId} top={`${top}rem`} onSelect={onSelect} />
+                  {entry.id === openId && onPick && <History key={entry.id} items={history} pickedId={pickedId} top={`${top + ENTRY_HEIGHT_REM}rem`} height={historyRem} onPick={onPick} />}
+                </Fragment>
+              );
+            })}
           </div>
         )}
       </div>

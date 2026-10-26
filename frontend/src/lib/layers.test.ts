@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HOT_SPOT_LINE, ICON_SIZE, iconImage, sortKey, symbolLayer } from "./layers";
+import { HOT_SPOT_LINE, ICON_SIZE, TRACK_LINE, historyIconImage, historyLayer, iconImage, sortKey, symbolLayer } from "./layers";
 
 const pairsLayer = (selectedId: string | null) => symbolLayer("pairs", { order: "latest", selectedId, active: true });
 
@@ -41,6 +41,20 @@ describe("layers", () => {
     const sizes = stops.filter((_, i) => i % 2 === 1);
     expect(sizes).toEqual([0.3, 0.5, 0.8, 1]);
     expect(HOT_SPOT_LINE.type).toBe("line");
+  });
+
+  it("draws the revealed detections in the lighter red, the one picked in the list grey, from their own source", () => {
+    expect(historyIconImage("x")).toEqual(["case", ["==", ["get", "id"], "x"], "vessel-picked", "vessel-history"]);
+    expect(historyIconImage(null)[1][2]).toBe("");
+    const layer = historyLayer("x");
+    expect([layer.id, layer.source, layer.slot]).toEqual(["history", "history", "top"]);
+    expect(layer.layout?.["icon-rotate"]).toEqual(["coalesce", ["get", "yaw"], 0]);
+    expect(layer.layout?.["icon-allow-overlap"]).toBe(true);
+  });
+
+  it("draws the vessel path as a dashed white line on the top slot, with its own source", () => {
+    expect(TRACK_LINE).toMatchObject({ id: "track", type: "line", source: "track", slot: "top" });
+    expect(TRACK_LINE.paint).toMatchObject({ "line-color": "#ffffff", "line-dasharray": [2, 2], "line-emissive-strength": 1 });
   });
 
   it("draws the hot-spot lines white and both layers on top of the basemap at full brightness", () => {

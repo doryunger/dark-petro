@@ -25,6 +25,8 @@ export const PAIR_IMAGES: Record<string, PairStyle> = {
 export const VESSEL_IMAGES: Record<string, PairStyle> = {
   "vessel-sanctioned": { fill: "#d64545", stroke: "#000000" },
   "vessel-selected": { fill: "#4fd0e4", stroke: "#ffffff" },
+  "vessel-picked": { fill: "#9aa5b0", stroke: "#ffffff" },
+  "vessel-history": { fill: "#e88f8f", stroke: "#000000" },
 };
 
 export function pairSvg({ fill, stroke, strokeWidth = 3, orientation = 180, width = BASE_WIDTH, height = BASE_HEIGHT }: PairStyle): string {

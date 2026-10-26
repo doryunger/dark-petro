@@ -5,11 +5,20 @@ import Header from "./components/Header";
 import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
-import { fetchMetadata } from "./lib/api";
+import { fetchMetadata, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
 import { sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
-import type { Entry, Filter, Meta, Order, Tab } from "./lib/types";
+import { historyOf, imoOf } from "./lib/groups";
+import { trackLine } from "./lib/track";
+import type { Entry, Filter, Meta, Order, Tab, TrackPoint } from "./lib/types";
+
+interface Selection {
+  entry: Entry | null;
+  parent: Entry | null;
+}
+
+const NOTHING: Selection = { entry: null, parent: null };
 
 function fallbackMeta(): Meta {
   const today = todayUtc();
@@ -22,11 +31,17 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("pairs");
   const [order, setOrder] = useState<Order>("latest");
   const [viewEntries, setViewEntries] = useState<Entry[]>([]);
-  const [selected, setSelected] = useState<Entry | null>(null);
+  const [selection, setSelection] = useState<Selection>(NOTHING);
+  const [track, setTrack] = useState<{ imo: string; points: TrackPoint[] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
   const mapRef = useRef<MapHandle>(null);
   const reelRef = useRef<ReelHandle>(null);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const viewRef = useRef(viewEntries);
+  viewRef.current = viewEntries;
+  const { entry: selected, parent } = selection;
 
   useEffect(() => {
     let alive = true;
@@ -47,26 +62,69 @@ export default function App() {
   }, [meta]);
 
   useEffect(() => {
-    if (!selected || !settled || viewEntries.some((e) => e.id === selected.id)) return;
-    setSelected(null);
-  }, [viewEntries, selected, settled]);
+    if (!selected || !settled) return;
+    const picked = parent !== null && selected.id !== parent.id;
+    if (picked || viewEntries.some((e) => e.id === selected.id)) return;
+    setSelection(NOTHING);
+  }, [viewEntries, selected, parent, settled]);
 
-  const entries = useMemo(() => sortEntries(viewEntries, order), [viewEntries, order]);
+  const openImo = parent ? imoOf(parent) : null;
+
+  useEffect(() => {
+    if (!openImo || !filter) {
+      setTrack(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    fetchTrack(openImo, filter, controller.signal)
+      .then((points) => setTrack({ imo: openImo, points }))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [openImo, filter]);
+
+  const points = useMemo(() => (track && track.imo === openImo ? track.points : []), [track, openImo]);
+  const line = useMemo(() => trackLine(points), [points]);
+  const others = useMemo(() => points.filter((p) => p.id !== parent?.id), [points, parent]);
+  const history = useMemo(() => (parent ? historyOf(points, parent.id) : []), [points, parent]);
+
+  const entries = useMemo(() => {
+    const shown = parent && !viewEntries.some((e) => e.id === parent.id) ? [...viewEntries, parent] : viewEntries;
+    return sortEntries(shown, order);
+  }, [viewEntries, parent, order]);
+
+  const pickedId = parent && selected && selected.id !== parent.id ? selected.id : null;
+  const cardId = parent?.id ?? selected?.id ?? null;
 
   const select = useCallback((entry: Entry, fromMap: boolean) => {
-    setSelected(entry);
-    setSettled(!mapRef.current?.flyTo(entry));
+    const current = selectionRef.current;
+    if (!fromMap && current.parent?.id === entry.id && current.entry?.id === entry.id) {
+      setSelection({ entry, parent: null });
+      return;
+    }
+    setSelection({ entry, parent: (entry.detections ?? 1) > 1 ? entry : null });
+    setSettled(!mapRef.current?.flyTo(entry, !viewRef.current.some((e) => e.id === entry.id)));
     if (fromMap) requestAnimationFrame(() => reelRef.current?.reveal(entry.id));
+  }, []);
+
+  const pick = useCallback((entry: Entry) => {
+    const { entry: current, parent: head } = selectionRef.current;
+    if (head && current?.id === entry.id && entry.id !== head.id) {
+      setSelection({ entry: head, parent: head });
+      setSettled(!mapRef.current?.flyTo(head, !viewRef.current.some((e) => e.id === head.id)));
+      return;
+    }
+    setSelection((state) => ({ ...state, entry }));
+    setSettled(!mapRef.current?.flyTo(entry, true));
   }, []);
 
   const apply = useCallback((next: Filter) => {
     setFilter(next);
-    setSelected((current) => (current && !matches(current, next) ? null : current));
+    setSelection((current) => ((current.entry && !matches(current.entry, next)) || (current.parent && !matches(current.parent, next)) ? NOTHING : current));
   }, []);
 
   const changeTab = useCallback((next: Tab) => {
     setTab(next);
-    setSelected(null);
+    setSelection(NOTHING);
     setViewEntries([]);
     setSettled(true);
   }, []);
@@ -77,10 +135,37 @@ export default function App() {
     <>
       <Header />
       {meta && filter ? <Filters meta={meta} applied={filter} onApply={apply} /> : <section className="filters" />}
-      <Reel ref={reelRef} tab={tab} onTab={changeTab} entries={entries} selectedId={selected?.id ?? null} order={order} onOrder={setOrder} onSelect={(entry) => select(entry, false)} />
-      <Details entry={selected} onClose={() => setSelected(null)} />
+      <Reel
+        ref={reelRef}
+        tab={tab}
+        onTab={changeTab}
+        entries={entries}
+        selectedId={cardId}
+        openId={parent?.id ?? null}
+        history={history}
+        pickedId={pickedId}
+        onPick={pick}
+        order={order}
+        onOrder={setOrder}
+        onSelect={(entry) => select(entry, false)}
+      />
+      <Details entry={selected} onClose={() => setSelection(NOTHING)} />
       {filter ? (
-        <MapView ref={mapRef} tab={tab} filter={filter} order={order} selectedId={selected?.id ?? null} onSelect={(entry) => select(entry, true)} onEntries={setViewEntries} onError={setToast} onSettled={() => setSettled(true)}>
+        <MapView
+          ref={mapRef}
+          tab={tab}
+          track={line}
+          history={others}
+          pickedId={pickedId}
+          onPick={pick}
+          filter={filter}
+          order={order}
+          selectedId={cardId}
+          onSelect={(entry) => select(entry, true)}
+          onEntries={setViewEntries}
+          onError={setToast}
+          onSettled={() => setSettled(true)}
+        >
           <Toast message={toast} onClose={closeToast} />
         </MapView>
       ) : (

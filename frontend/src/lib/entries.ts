@@ -12,6 +12,10 @@ export function sourceName(code: string): string {
   return SOURCE_NAMES[code] ?? code;
 }
 
+export function entryTitle(entry: Pick<Entry, "tab" | "shortId" | "vessels">): string {
+  return (entry.tab === "sanctioned" && entry.vessels[0]?.name) || entry.shortId;
+}
+
 export function entryIconClass(entry: Pick<Entry, "tab" | "sanctioned">): string {
   const kind = entry.tab === "sanctioned" ? " entry-icon-vessel" : "";
   return `entry-icon${kind}${entry.sanctioned ? " entry-icon-sanctioned" : ""}`;
@@ -47,6 +51,7 @@ export function toEntry(feature: TileFeature, tab: Tab = "pairs"): Entry {
     image: p.image ?? null,
     lon: p.lon ?? tileLon,
     lat: p.lat ?? tileLat,
+    detections: single && typeof p.n === "number" ? p.n : undefined,
     vessels: single ? [{ ...vessel(p, 1), sanctioned: true }] : [vessel(p, 1), vessel(p, 2)],
   };
 }

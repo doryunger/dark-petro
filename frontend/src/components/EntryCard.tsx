@@ -1,18 +1,20 @@
 import { formatDate } from "../lib/dates";
-import { entryIconClass, hotSpotLabel } from "../lib/entries";
+import { entryIconClass, entryTitle, hotSpotLabel } from "../lib/entries";
 import type { Entry } from "../lib/types";
 
 interface Props {
   entry: Entry;
   selected: boolean;
+  open?: boolean;
   top: string;
   onSelect: (entry: Entry) => void;
 }
 
-export default function EntryCard({ entry, selected, top, onSelect }: Props) {
+export default function EntryCard({ entry, selected, open = false, top, onSelect }: Props) {
+  const count = entry.detections ?? 1;
   return (
     <article
-      className={`entry${selected ? " entry-selected" : ""}`}
+      className={`entry${selected ? " entry-selected" : ""}${open ? " entry-open" : ""}${count > 1 ? " entry-has-count" : ""}`}
       style={{ top }}
       role="button"
       tabIndex={0}
@@ -25,7 +27,8 @@ export default function EntryCard({ entry, selected, top, onSelect }: Props) {
       }}
     >
       <span className={entryIconClass(entry)} />
-      <div className="entry-id">{entry.shortId}</div>
+      <div className="entry-id">{entryTitle(entry)}</div>
+      {count > 1 && <span className="entry-count">×{count}</span>}
       <div className="entry-meta">
         <span className="entry-area">{hotSpotLabel(entry.hotSpot)}</span>
         <span className="entry-date">{formatDate(entry.date)}</span>

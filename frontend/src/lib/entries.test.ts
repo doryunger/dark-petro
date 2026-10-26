@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryIconClass, hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import { entryIconClass, entryTitle, hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
 import type { Entry, TileFeature } from "./types";
 
 const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
@@ -34,6 +34,14 @@ describe("entries", () => {
     expect(e.vessels).toEqual([{ name: "NESO", flag: "ST", imo: "9257149", sanctioned: true, known: true }]);
     expect(toEntry(feature("s2_1_a")).tab).toBe("pairs");
     expect(toEntry(feature("s2_1_a")).vessels).toHaveLength(2);
+  });
+
+  it("titles a sanctioned vessel by its name and everything else by the short ID", () => {
+    const named = toEntry(feature("s1_20261019T141603_w0-44977-274982", { v1_name: "NESO" }), "sanctioned");
+    const unnamed = toEntry(feature("s1_20261019T141603_w0-44977-274982", { v1_name: undefined }), "sanctioned");
+    expect(entryTitle(named)).toBe("NESO");
+    expect(entryTitle(unnamed)).toBe("44977-274982");
+    expect(entryTitle(toEntry(feature("s2_20261021T065238_56045-272349")))).toBe("56045-272349");
   });
 
   it("draws a pair icon or a single-vessel icon, red when sanctioned", () => {

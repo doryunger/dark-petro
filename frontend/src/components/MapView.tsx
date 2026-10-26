@@ -1,26 +1,32 @@
-import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, type LngLatBounds } from "mapbox-gl";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, type GeoJSONSource } from "mapbox-gl";
+import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
 import hotSpots from "../data/hot_spots.json";
-import { FLY_ZOOM, MAX_TILE_ZOOM, QUERY_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
+import { FLY_ZOOM, MAX_TILE_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
 import { toEntry, uniqueEntries } from "../lib/entries";
 import { tileUrl } from "../lib/filters";
 import { featureBounds, shouldFly, topCenter } from "../lib/geo";
 import { addMapImages } from "../lib/icons";
-import { HOT_SPOT_LINE, iconImage, sortKey, symbolLayer } from "../lib/layers";
+import { trackEntry } from "../lib/groups";
+import { HOT_SPOT_LINE, TRACK_LINE, historyIconImage, historyLayer, historySortKey, iconImage, sortKey, symbolLayer } from "../lib/layers";
 import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
-import type { Entry, Filter, Order, Tab, TileFeature } from "../lib/types";
+import { historyPoints } from "../lib/track";
+import type { Entry, Filter, Order, Tab, TileFeature, TrackLine, TrackPoint } from "../lib/types";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const STYLE = import.meta.env.VITE_MAPBOX_STYLE;
 const ERROR_GAP_MS = 10000;
 
 export interface MapHandle {
-  flyTo(entry: Entry): boolean;
+  flyTo(entry: Entry, always?: boolean): boolean;
 }
 
 interface Props {
   tab: Tab;
+  track: TrackLine;
+  history: TrackPoint[];
+  pickedId: string | null;
+  onPick: (entry: Entry) => void;
   filter: Filter;
   order: Order;
   selectedId: string | null;
@@ -31,20 +37,21 @@ interface Props {
   children?: ReactNode;
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
-  const queryBounds = useRef<LngLatBounds | null>(null);
   const signature = useRef("");
-  const latest = useRef({ tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
-  const [showBack, setShowBack] = useState(false);
-  latest.current = { tab, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
+  const latest = useRef({ tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
+  latest.current = { tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
 
   useImperativeHandle(ref, () => ({
-    flyTo(entry) {
+    flyTo(entry, always = false) {
       const map = mapRef.current;
-      if (!map || !shouldFly(map.getZoom())) return false;
-      map.flyTo({ center: [entry.lon, entry.lat], zoom: FLY_ZOOM, essential: true });
+      if (!map) return false;
+      const zoom = map.getZoom();
+      const far = shouldFly(zoom);
+      if (!far && !always) return false;
+      map.flyTo({ center: [entry.lon, entry.lat], zoom: far ? FLY_ZOOM : zoom, essential: true });
       return true;
     },
   }), []);
@@ -84,6 +91,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, ord
       await addMapImages(map);
       if (!map.getSource("hot-spots")) map.addSource("hot-spots", { type: "geojson", data: hotSpots });
       if (!map.getLayer(HOT_SPOT_LINE.id)) map.addLayer(HOT_SPOT_LINE);
+      if (!map.getSource("track")) map.addSource("track", { type: "geojson", data: latest.current.track });
+      if (!map.getLayer(TRACK_LINE.id)) map.addLayer(TRACK_LINE);
+      if (!map.getSource("history")) map.addSource("history", { type: "geojson", data: historyPoints(latest.current.history) });
+      if (!map.getLayer("history")) map.addLayer(historyLayer(latest.current.pickedId));
       for (const id of TABS) {
         const { tab: active, filter: current, order: sort, selectedId: picked } = latest.current;
         if (!map.getSource(id)) {
@@ -117,15 +128,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, ord
     map.on("idle", () => schedule(true));
     map.on("moveend", () => schedule(false));
 
-    map.on("zoom", () => {
-      const next = map.getZoom() > QUERY_ZOOM;
-      setShowBack((prev) => (prev === next ? prev : next));
-    });
-    map.on("moveend", () => {
-      if (map.getZoom() <= QUERY_ZOOM) queryBounds.current = map.getBounds();
-    });
     map.fitBounds(featureBounds(hotSpots), { padding: 48, maxZoom: START_MAX_ZOOM, duration: 0 });
-    queryBounds.current = map.getBounds();
+
+    const entryOf = (feature: TileFeature & { layer: { id: string } }, layer: Tab): Entry | null => {
+      if (feature.layer.id !== "history") return toEntry(feature, layer);
+      const point = latest.current.history.find((p) => p.id === feature.properties.id);
+      return point ? trackEntry(point) : null;
+    };
 
     const popup = new Popup({ closeButton: false, closeOnClick: false, closeOnMove: false, offset: 14, anchor: "bottom", maxWidth: "none" });
     let hoverId: string | null = null;
@@ -136,21 +145,29 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, ord
     };
     map.on("mousemove", (e) => {
       const layer = latest.current.tab;
-      if (!map.getLayer(layer)) return;
-      const found = map.queryRenderedFeatures(e.point, { layers: [layer] })[0];
+      const layers = [layer, "history"].filter((id) => map.getLayer(id));
+      if (!layers.length) return;
+      const found = map.queryRenderedFeatures(e.point, { layers })[0];
       if (!found) return hide();
       map.getCanvas().style.cursor = "pointer";
       const tile = found as unknown as TileFeature;
       if (tile.properties.id === hoverId) return;
+      const entry = entryOf(found as unknown as TileFeature & { layer: { id: string } }, layer);
+      if (!entry) return hide();
       hoverId = tile.properties.id;
-      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(toEntry(tile, layer))).addTo(map);
+      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(entry)).addTo(map);
     });
     map.on("mouseout", hide);
     map.on("click", (e) => {
       const layer = latest.current.tab;
-      if (!map.getLayer(layer)) return;
-      const feature = map.queryRenderedFeatures(e.point, { layers: [layer] })[0];
-      if (feature) latest.current.onSelect(toEntry(feature as unknown as TileFeature, layer));
+      const layers = [layer, "history"].filter((id) => map.getLayer(id));
+      if (!layers.length) return;
+      const feature = map.queryRenderedFeatures(e.point, { layers })[0];
+      if (!feature) return;
+      const entry = entryOf(feature as unknown as TileFeature & { layer: { id: string } }, layer);
+      if (!entry) return;
+      if ((feature as unknown as { layer: { id: string } }).layer.id === "history") latest.current.onPick(entry);
+      else latest.current.onSelect(entry);
     });
 
     let lastError = 0;
@@ -184,6 +201,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, ord
   }, [filter]);
 
   useEffect(() => {
+    (mapRef.current?.getSource("track") as GeoJSONSource | undefined)?.setData(track);
+  }, [track]);
+
+  useEffect(() => {
+    (mapRef.current?.getSource("history") as GeoJSONSource | undefined)?.setData(historyPoints(history));
+  }, [history]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("history")) return;
+    map.setLayoutProperty("history", "icon-image", historyIconImage(pickedId));
+    map.setLayoutProperty("history", "symbol-sort-key", historySortKey(pickedId));
+  }, [pickedId]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     signature.current = "";
@@ -203,20 +235,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, filter, ord
     }
   }, [order, selectedId, tab]);
 
-  const back = () => {
-    const map = mapRef.current;
-    if (map && queryBounds.current) map.fitBounds(queryBounds.current, { maxZoom: QUERY_ZOOM, padding: 0 });
-  };
-
   return (
     <main className="map">
       <div className="map-canvas" ref={container} />
       {children}
-      {showBack && (
-        <button className="back-button" type="button" onClick={back}>
-          Back to query area
-        </button>
-      )}
     </main>
   );
 });

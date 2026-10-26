@@ -14,6 +14,34 @@ export function sortKey(order: Order, selectedId: string | null | undefined): Ex
   return ["case", ["==", ["get", "id"], selectedId ?? ""], 1e13, ["*", sign, ["get", "t"]]];
 }
 
+export function historyIconImage(pickedId: string | null | undefined): ExpressionSpecification {
+  return ["case", ["==", ["get", "id"], pickedId ?? ""], "vessel-picked", "vessel-history"];
+}
+
+export function historySortKey(pickedId: string | null | undefined): ExpressionSpecification {
+  return ["case", ["==", ["get", "id"], pickedId ?? ""], 1, 0];
+}
+
+export function historyLayer(pickedId: string | null | undefined): SymbolLayerSpecification {
+  return {
+    id: "history",
+    type: "symbol",
+    source: "history",
+    slot: "top",
+    paint: { "icon-emissive-strength": 1 },
+    layout: {
+      "icon-image": historyIconImage(pickedId),
+      "icon-size": ICON_SIZE,
+      "icon-rotate": ["coalesce", ["get", "yaw"], 0],
+      "icon-rotation-alignment": "map",
+      "icon-pitch-alignment": "map",
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "symbol-sort-key": historySortKey(pickedId),
+    },
+  };
+}
+
 export function symbolLayer(tab: Tab, { order, selectedId, active }: { order: Order; selectedId: string | null | undefined; active: boolean }): SymbolLayerSpecification {
   return {
     id: tab,
@@ -35,6 +63,15 @@ export function symbolLayer(tab: Tab, { order, selectedId, active }: { order: Or
     },
   };
 }
+
+export const TRACK_LINE: LineLayerSpecification = {
+  id: "track",
+  type: "line",
+  source: "track",
+  slot: "top",
+  layout: { "line-cap": "butt", "line-join": "round" },
+  paint: { "line-color": "#ffffff", "line-width": 2, "line-opacity": 0.9, "line-dasharray": [2, 2], "line-emissive-strength": 1 },
+};
 
 export const HOT_SPOT_LINE: LineLayerSpecification = {
   id: "hot-spots",
