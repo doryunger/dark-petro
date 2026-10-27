@@ -164,7 +164,9 @@ def parse_filters(query: str, known_sources: list[str], include_sources: bool = 
         raise BadRequest(f"unknown parameter {sorted(extra)[0]}")
     if any(len(v) != 1 for v in params.values()):
         raise BadRequest("a parameter is given once")
-    out = {"from": None, "to": None, "sources": None, "id": None}
+    out = {"from": None, "to": None, "sources": None}
+    if include_id:
+        out["id"] = None
     if "from" in params:
         out["from"] = parse_day(params["from"][0])
     if "to" in params:
