@@ -1,6 +1,6 @@
 import hotSpots from "../data/hot_spots.json";
 import { SOURCE_NAMES } from "./constants";
-import type { Entry, Order, Tab, TileFeature, Vessel } from "./types";
+import type { ActivityMatch, ActivityRecord, Entry, Order, Tab, TileFeature, Vessel } from "./types";
 
 const LABELS = Object.fromEntries(hotSpots.features.map((f) => [f.properties.name, f.properties.label])) as Record<string, string>;
 
@@ -53,6 +53,36 @@ export function toEntry(feature: TileFeature, tab: Tab = "pairs"): Entry {
     lat: p.lat ?? tileLat,
     detections: single && typeof p.n === "number" ? p.n : undefined,
     vessels: single ? [{ ...vessel(p, 1), sanctioned: true }] : [vessel(p, 1), vessel(p, 2)],
+  };
+}
+
+export function toActivityMatch(record: ActivityRecord): ActivityMatch {
+  const vessels: Vessel[] = [1, 2].map((number) => {
+    const prefix = `v${number}_`;
+    const name = record[`${prefix}name` as "v1_name" | "v2_name"];
+    return {
+      name,
+      flag: record[`${prefix}flag` as "v1_flag" | "v2_flag"],
+      imo: record[`${prefix}imo` as "v1_imo" | "v2_imo"],
+      sanctioned: record[`${prefix}sanctioned` as "v1_sanctioned" | "v2_sanctioned"],
+      known: name != null,
+    };
+  });
+  return {
+    entry: {
+      id: record.id,
+      tab: "pairs",
+      shortId: shortId(record.id),
+      date: record.date,
+      t: record.t,
+      hotSpot: record.hot_spot,
+      source: record.source,
+      sanctioned: record.sanctioned,
+      image: record.image,
+      lon: record.lon,
+      lat: record.lat,
+      vessels,
+    },
   };
 }
 

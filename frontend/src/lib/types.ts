@@ -35,6 +35,7 @@ export interface Entry {
   lat: number;
   vessels: Vessel[];
   detections?: number;
+  hasRelatedActivity?: boolean;
 }
 
 export interface TrackPoint {
@@ -50,6 +51,30 @@ export interface TrackPoint {
   name: string | null;
   flag: string | null;
   imo: string | null;
+}
+
+export interface ActivityMatch {
+  entry: Entry;
+}
+
+export interface ActivityRecord {
+  id: string;
+  date: string;
+  t: number;
+  hot_spot: string;
+  source: string;
+  image: string | null;
+  lon: number;
+  lat: number;
+  sanctioned: boolean;
+  v1_name: string | null;
+  v1_flag: string | null;
+  v1_imo: string | null;
+  v1_sanctioned: boolean;
+  v2_name: string | null;
+  v2_flag: string | null;
+  v2_imo: string | null;
+  v2_sanctioned: boolean;
 }
 
 export interface TrackLine {

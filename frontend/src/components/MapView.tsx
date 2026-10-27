@@ -3,11 +3,11 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } fr
 import hotSpots from "../data/hot_spots.json";
 import { FLY_ZOOM, MAX_TILE_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
 import { toEntry, uniqueEntries } from "../lib/entries";
-import { tileUrl } from "../lib/filters";
+import { activityTileUrl, tileUrl } from "../lib/filters";
 import { featureBounds, shouldFly, topCenter } from "../lib/geo";
 import { addMapImages } from "../lib/icons";
 import { trackEntry } from "../lib/groups";
-import { HOT_SPOT_LINE, TRACK_LINE, historyIconImage, historyLayer, historySortKey, iconImage, sortKey, symbolLayer } from "../lib/layers";
+import { HOT_SPOT_LINE, TRACK_LINE, activityFocusLayer, historyIconImage, historyLayer, historySortKey, iconImage, sortKey, symbolLayer } from "../lib/layers";
 import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
 import { historyPoints } from "../lib/track";
@@ -25,6 +25,7 @@ interface Props {
   tab: Tab;
   track: TrackLine;
   history: TrackPoint[];
+  activityFocus: Entry | null;
   pickedId: string | null;
   onPick: (entry: Entry) => void;
   filter: Filter;
@@ -37,12 +38,12 @@ interface Props {
   children?: ReactNode;
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const signature = useRef("");
-  const latest = useRef({ tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
-  latest.current = { tab, track, history, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
+  const latest = useRef({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
+  latest.current = { tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
 
   useImperativeHandle(ref, () => ({
     flyTo(entry, always = false) {
@@ -50,7 +51,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
       if (!map) return false;
       const zoom = map.getZoom();
       const far = shouldFly(zoom);
-      if (!far && !always) return false;
+      const outside = !map.getBounds().contains([entry.lon, entry.lat]);
+      if (!far && !always && !outside) return false;
       map.flyTo({ center: [entry.lon, entry.lat], zoom: far ? FLY_ZOOM : zoom, essential: true });
       return true;
     },
@@ -102,6 +104,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
         }
         if (!map.getLayer(id)) map.addLayer(symbolLayer(id, { order: sort, selectedId: id === active ? picked : null, active: id === active }));
       }
+      if (latest.current.activityFocus && !map.getSource("activity-focus")) {
+        map.addSource("activity-focus", { type: "vector", tiles: [activityTileUrl(window.location.origin, latest.current.filter, latest.current.activityFocus.id)], minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+      }
+      if (latest.current.activityFocus && !map.getLayer("activity-focus")) map.addLayer(activityFocusLayer());
     };
     map.on("style.load", setup);
 
@@ -174,7 +180,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
     let fellBack = false;
     map.on("error", (e) => {
       const now = Date.now();
-      if (TABS.includes((e as { sourceId?: string }).sourceId as Tab)) {
+      const sourceId = (e as { sourceId?: string }).sourceId;
+      if (TABS.includes(sourceId as Tab) || sourceId === "activity-focus") {
         if (now - lastError > ERROR_GAP_MS) latest.current.onError("Could not load the map data. Check the connection and try again.");
         lastError = now;
       } else if (TOKEN && !fellBack && !map.isStyleLoaded()) {
@@ -199,6 +206,23 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
       if (source?.setTiles) source.setTiles([tileUrl(window.location.origin, filter, id)]);
     }
   }, [filter]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    if (!activityFocus) {
+      if (map.getLayer("activity-focus")) map.removeLayer("activity-focus");
+      if (map.getSource("activity-focus")) map.removeSource("activity-focus");
+      return;
+    }
+    const tiles = [activityTileUrl(window.location.origin, filter, activityFocus.id)];
+    const source = map.getSource("activity-focus") as { setTiles?: (tiles: string[]) => void } | undefined;
+    if (source?.setTiles) source.setTiles(tiles);
+    else {
+      map.addSource("activity-focus", { type: "vector", tiles, minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+      map.addLayer(activityFocusLayer());
+    }
+  }, [activityFocus, filter]);
 
   useEffect(() => {
     (mapRef.current?.getSource("track") as GeoJSONSource | undefined)?.setData(track);

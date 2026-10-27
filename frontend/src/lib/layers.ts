@@ -42,6 +42,27 @@ export function historyLayer(pickedId: string | null | undefined): SymbolLayerSp
   };
 }
 
+export function activityFocusLayer(): SymbolLayerSpecification {
+  return {
+    id: "activity-focus",
+    type: "symbol",
+    source: "activity-focus",
+    "source-layer": "activity",
+    slot: "top",
+    paint: { "icon-emissive-strength": 1 },
+    layout: {
+      "icon-image": "pair",
+      "icon-size": ICON_SIZE,
+      "icon-rotate": ["coalesce", ["get", "yaw"], 0],
+      "icon-rotation-alignment": "map",
+      "icon-pitch-alignment": "map",
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "symbol-sort-key": 1e13,
+    },
+  };
+}
+
 export function symbolLayer(tab: Tab, { order, selectedId, active }: { order: Order; selectedId: string | null | undefined; active: boolean }): SymbolLayerSpecification {
   return {
     id: tab,

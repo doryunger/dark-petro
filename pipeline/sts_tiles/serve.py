@@ -15,9 +15,11 @@ import duckdb
 log = logging.getLogger(__name__)
 
 MAX_ZOOM = 14
-TILE_PATH = re.compile(r"^/tiles/(?:(sanctioned)/)?(\d{1,2})/(\d{1,5})/(\d{1,5})\.mvt$")
+TILE_PATH = re.compile(r"^/tiles/(?:(sanctioned|activity)/)?(\d{1,2})/(\d{1,5})/(\d{1,5})\.mvt$")
 TRACK_PATH = re.compile(r"^/tracks/(\w{1,20})$")
+ACTIVITY_PATH = re.compile(r"^/activities/(\w{1,20})$")
 DATE_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+FINDING_ID_TEXT = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
 ALLOWED_PARAMS = {"from", "to", "source"}
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 TILE_MARGIN = 0.1
@@ -68,6 +70,7 @@ SANCTIONED_WINDOW = """,
 LAYERS = {
     "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED).replace("%WINDOW%", "").replace("%HEAD%", "")},
     "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "").replace("%WINDOW%", SANCTIONED_WINDOW).replace("%HEAD%", " AND head_rank = 1")},
+    "activity": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "activity").replace("%DERIVED%", PAIR_DERIVED).replace("%WINDOW%", "").replace("%HEAD%", "")},
 }
 
 
@@ -77,6 +80,28 @@ SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT
 FROM read_parquet(?)
 WHERE vessel_imo = ?{extra}
 ORDER BY capture_utc DESC, finding_id
+"""
+
+ACTIVITY_SQL = """
+SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png,
+  round(lon, 6), round(lat, 6),
+  coalesce(vessel_1_is_sanctioned, false) OR coalesce(vessel_2_is_sanctioned, false),
+  vessel_1_name, vessel_1_flag, vessel_1_imo, coalesce(vessel_1_is_sanctioned, false),
+  vessel_2_name, vessel_2_flag, vessel_2_imo, coalesce(vessel_2_is_sanctioned, false)
+FROM read_parquet(?)
+WHERE (vessel_1_imo = ? OR vessel_2_imo = ?){extra}
+ORDER BY capture_utc DESC, finding_id
+"""
+
+ACTIVITY_IMOS_SQL = """
+SELECT DISTINCT s.vessel_imo
+FROM read_parquet(?) s
+WHERE s.vessel_imo IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM read_parquet(?) p
+    WHERE (p.vessel_1_imo = s.vessel_imo OR p.vessel_2_imo = s.vessel_imo){extra}
+  )
 """
 
 
@@ -129,25 +154,33 @@ def parse_day(text: str) -> date:
         raise BadRequest("not a calendar date") from None
 
 
-def parse_filters(query: str, known_sources: list[str]) -> dict:
+def parse_filters(query: str, known_sources: list[str], include_sources: bool = True, include_id: bool = False) -> dict:
     params = parse_qs(query, keep_blank_values=True)
-    extra = set(params) - ALLOWED_PARAMS
+    allowed = ALLOWED_PARAMS if include_sources else ALLOWED_PARAMS - {"source"}
+    if include_id:
+        allowed = allowed | {"id"}
+    extra = set(params) - allowed
     if extra:
         raise BadRequest(f"unknown parameter {sorted(extra)[0]}")
     if any(len(v) != 1 for v in params.values()):
         raise BadRequest("a parameter is given once")
-    out = {"from": None, "to": None, "sources": None}
+    out = {"from": None, "to": None, "sources": None, "id": None}
     if "from" in params:
         out["from"] = parse_day(params["from"][0])
     if "to" in params:
         out["to"] = parse_day(params["to"][0])
     if out["from"] and out["to"] and out["from"] > out["to"]:
         raise BadRequest("from is after to")
-    if "source" in params:
+    if include_sources and "source" in params:
         wanted = [v for v in params["source"][0].split(",") if v]
         if not wanted or any(v not in known_sources for v in wanted):
             raise BadRequest("unknown source")
         out["sources"] = sorted(set(wanted))
+    if include_id:
+        finding_id = params.get("id", [""])[0]
+        if not FINDING_ID_TEXT.fullmatch(finding_id):
+            raise BadRequest("a valid activity id is required")
+        out["id"] = finding_id
     return out
 
 
@@ -207,12 +240,41 @@ class Store:
         keys = ("id", "date", "t", "hot_spot", "source", "image", "yaw", "lon", "lat", "name", "flag", "imo")
         return [dict(zip(keys, r)) for r in rows]
 
+    def activities(self, imo: str, filters: dict) -> list[dict]:
+        source = self.cfg.current / "findings.parquet"
+        if not source.exists():
+            return []
+        extra, args = filter_clause(filters)
+        cur = self.con.cursor()
+        try:
+            rows = cur.execute(ACTIVITY_SQL.replace("{extra}", extra), [str(source), imo, imo, *args]).fetchall()
+        finally:
+            cur.close()
+        keys = ("id", "date", "t", "hot_spot", "source", "image", "lon", "lat", "sanctioned", "v1_name", "v1_flag", "v1_imo", "v1_sanctioned", "v2_name", "v2_flag", "v2_imo", "v2_sanctioned")
+        return [dict(zip(keys, row)) for row in rows]
+
+    def activity_imos(self, filters: dict) -> list[str]:
+        sanctioned = self.cfg.current / "sanctioned.parquet"
+        findings = self.cfg.current / "findings.parquet"
+        if not sanctioned.exists() or not findings.exists():
+            return []
+        extra, args = filter_clause(filters)
+        cur = self.con.cursor()
+        try:
+            rows = cur.execute(ACTIVITY_IMOS_SQL.replace("{extra}", extra), [str(sanctioned), str(findings), *args]).fetchall()
+        finally:
+            cur.close()
+        return [row[0] for row in rows]
+
     def tile(self, layer: str, z: int, x: int, y: int, filters: dict) -> bytes:
         source = self.cfg.current / LAYERS[layer]["file"]
         if not source.exists():
             return b""
         west, south, east, north = padded_bounds(z, x, y)
         extra, args = filter_clause(filters)
+        if layer == "activity":
+            extra += " AND finding_id = ?"
+            args.append(filters["id"])
         cur = self.con.cursor()
         try:
             row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra), [z, x, y, str(source), *args, west, east, south, north]).fetchone()
@@ -265,8 +327,12 @@ def make_handler(store: Store):
                     return self.tile(path, parts.query)
                 if path == "/metadata":
                     return self.metadata()
+                if path == "/activity-imos":
+                    return self.activity_imos(parts.query)
                 if path.startswith("/tracks/"):
                     return self.track(path, parts.query)
+                if path.startswith("/activities/"):
+                    return self.activities(path, parts.query)
                 if path.startswith("/captures/"):
                     return self.capture(path)
                 return self.app(path)
@@ -281,7 +347,7 @@ def make_handler(store: Store):
             if not manifest:
                 return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
             layer, z, x, y = parse_tile_request(path)
-            filters = parse_filters(query, known_sources(manifest))
+            filters = parse_filters(query, known_sources(manifest), include_sources=layer != "activity", include_id=layer == "activity")
             etag = etag_for(manifest["build_id"], path, query)
             if self.headers.get("If-None-Match") == etag:
                 self.send_response(HTTPStatus.NOT_MODIFIED)
@@ -301,6 +367,23 @@ def make_handler(store: Store):
                 raise BadRequest("not a track path")
             filters = parse_filters(query, known_sources(manifest))
             self.send_json(HTTPStatus.OK, {"imo": m.group(1), "points": store.track(m.group(1), filters)})
+
+        def activities(self, path: str, query: str):
+            manifest = store.manifest()
+            if not manifest:
+                return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
+            m = ACTIVITY_PATH.match(path)
+            if not m:
+                raise BadRequest("not an activity path")
+            filters = parse_filters(query, known_sources(manifest), include_sources=False)
+            self.send_json(HTTPStatus.OK, {"imo": m.group(1), "activities": store.activities(m.group(1), filters)})
+
+        def activity_imos(self, query: str):
+            manifest = store.manifest()
+            if not manifest:
+                return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
+            filters = parse_filters(query, known_sources(manifest), include_sources=False)
+            self.send_json(HTTPStatus.OK, {"imos": store.activity_imos(filters)})
 
         def metadata(self):
             meta = store.metadata()
