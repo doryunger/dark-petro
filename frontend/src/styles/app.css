@@ -34,7 +34,7 @@ body {
 
 body {
   display: grid;
-  grid-template-columns: 15vw 15vw 1fr;
+  grid-template-columns: 13vw 15vw minmax(0, 1fr);
   grid-template-rows: 5.5rem auto 1fr;
   font-family: "Roboto", system-ui, sans-serif;
   background: #030c13;
@@ -195,6 +195,7 @@ body {
   grid-row: 3;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   background: #030c13;
   border-right: 1px solid #091722;
@@ -216,9 +217,10 @@ body {
   background: transparent;
   color: #9fb3c2;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: clamp(0.6875rem, 0.625vw, 0.75rem);
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.15;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -521,6 +523,7 @@ body {
   grid-row: 3;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: #030c13;
