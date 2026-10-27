@@ -81,7 +81,10 @@ export default function Details({ entry, onClose, activityMatches, headerBackLab
               {primaryVessel?.imo ? <Row label="Registration" value={<RegistrationValue vessel={primaryVessel} />} /> : primaryVessel?.flag && <Row label="Flag" value={<span className="registration-flag">{primaryVessel.flag}</span>} />}
             </>
           ) : (
-            entry.vessels.map((vessel, i) => <Vessel key={`${vessel.imo ?? vessel.name}-${vessel.flag ?? "unknown"}-${vessel.sanctioned}`} number={i + 1} vessel={vessel} onOpenVessel={onOpenSanctionedVessel} />)
+            entry.vessels.map((vessel, index) => {
+              const number = index + 1;
+              return <Vessel key={`participant-${number}`} number={number} vessel={vessel} onOpenVessel={onOpenSanctionedVessel} />;
+            })
           )}
           <Row label="Capture time" value={`${formatDate(entry.date)} ${formatTime(entry.t)}`} />
           <Row label="Position" value={`${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}`} />
