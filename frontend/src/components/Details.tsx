@@ -8,14 +8,14 @@ function RegistrationValue({ vessel }: { vessel: VesselData }) {
   return <>{vessel.imo}{vessel.imo && vessel.flag ? " " : ""}{vessel.flag && <span className="registration-flag">({vessel.flag})</span>}</>;
 }
 
-function Vessel({ number, vessel }: { number: number; vessel: VesselData }) {
+function Vessel({ number, vessel, onOpenVessel }: { number: number; vessel: VesselData; onOpenVessel: (imo: string) => void }) {
   return (
     <div className="detail-row detail-row-vessel">
       <span className="detail-label">
         <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
       </span>
       <span className="detail-value">
-        {vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
+        {vessel.sanctioned && vessel.imo ? <button className="details-vessel-link" type="button" onClick={() => { if (vessel.imo) onOpenVessel(vessel.imo); }}>{vessel.known ? vessel.name : "N/A"}</button> : vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
         {vessel.sanctioned && <span className="detail-badge">Sanctioned</span>}
         {vessel.imo && <span className="detail-registration-inline"><span className="detail-label">Registration:</span> <RegistrationValue vessel={vessel} /></span>}
         {!vessel.imo && vessel.flag && <span className="detail-registration-inline"><span className="detail-label">Flag:</span> <span className="registration-flag">{vessel.flag}</span></span>}
@@ -47,21 +47,22 @@ interface Props {
   entry: Entry | null;
   onClose: () => void;
   activityMatches: ActivityMatch[];
-  activityReturn: Entry | null;
+  headerBackLabel: string | null;
   onOpenActivity: (match: ActivityMatch) => void;
-  onReturnVessel: () => void;
+  onOpenSanctionedVessel: (imo: string) => void;
+  onBack: () => void;
 }
 
-export default function Details({ entry, onClose, activityMatches, activityReturn, onOpenActivity, onReturnVessel }: Props) {
+export default function Details({ entry, onClose, activityMatches, headerBackLabel, onOpenActivity, onOpenSanctionedVessel, onBack }: Props) {
   if (!entry) return <section className="details" />;
-  const title = activityReturn ? `${activityReturn.vessels[0]?.name || "Vessel"}/${entry.shortId}` : entryTitle(entry);
+  const headerTail = entry.tab === "pairs" ? entry.shortId : entryTitle(entry);
   const primaryVessel = entry.vessels[0];
   return (
     <section className="details">
       <header className="details-header">
         <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />
         <h2 className="details-id">
-          {activityReturn ? <><button className="details-vessel-link" type="button" onClick={onReturnVessel}>{activityReturn.vessels[0]?.name || "Vessel"}</button>/{entry.shortId}</> : title}
+          {headerBackLabel ? <><button className="details-vessel-link" type="button" onClick={onBack}>{headerBackLabel}</button>/{headerTail}</> : entryTitle(entry)}
         </h2>
         <button className="details-close" type="button" aria-label="Close" onClick={onClose}>
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -80,13 +81,13 @@ export default function Details({ entry, onClose, activityMatches, activityRetur
               {primaryVessel?.imo ? <Row label="Registration" value={<RegistrationValue vessel={primaryVessel} />} /> : primaryVessel?.flag && <Row label="Flag" value={<span className="registration-flag">{primaryVessel.flag}</span>} />}
             </>
           ) : (
-            entry.vessels.map((vessel, i) => <Vessel key={i} number={i + 1} vessel={vessel} />)
+            entry.vessels.map((vessel, i) => <Vessel key={`${vessel.imo ?? vessel.name}-${vessel.flag ?? "unknown"}-${vessel.sanctioned}`} number={i + 1} vessel={vessel} onOpenVessel={onOpenSanctionedVessel} />)
           )}
           <Row label="Capture time" value={`${formatDate(entry.date)} ${formatTime(entry.t)}`} />
           <Row label="Position" value={`${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}`} />
           {entry.tab === "sanctioned" && activityMatches.length > 0 && <section className="details-activities" aria-label="Related suspicious activities">
             <h3 className="details-activities-title">Related suspicious activities</h3>
-            <div className="details-activities-list" aria-label="Matching activity entries">
+            <div className="details-activities-list">
               {activityMatches.map((match) => {
                 return <button className="details-activity" key={match.entry.id} type="button" onClick={() => onOpenActivity(match)}>
                   <span className="details-activity-icon" aria-hidden="true" />

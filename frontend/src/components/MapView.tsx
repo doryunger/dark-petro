@@ -1,4 +1,4 @@
-import { AttributionControl, Map, Marker, NavigationControl, Popup, ScaleControl, type GeoJSONSource } from "mapbox-gl";
+import { AttributionControl, Map as MapboxMap, Marker, NavigationControl, Popup, ScaleControl, type GeoJSONSource } from "mapbox-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
 import hotSpots from "../data/hot_spots.json";
 import { FLY_ZOOM, MAX_TILE_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
@@ -40,7 +40,7 @@ interface Props {
 
 const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<Map | null>(null);
+  const mapRef = useRef<MapboxMap | null>(null);
   const signature = useRef("");
   const latest = useRef({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
   latest.current = { tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
@@ -60,7 +60,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
 
   useEffect(() => {
     if (!container.current) return undefined;
-    const map = new Map({
+    const map = new MapboxMap({
       container: container.current,
       style: styleFor(TOKEN, STYLE),
       accessToken: TOKEN,
@@ -193,7 +193,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
 
     return () => {
       cancelAnimationFrame(frame);
-      labels.forEach((marker) => marker.remove());
+      labels.forEach((marker) => {
+        marker.remove();
+      });
       popup.remove();
       map.remove();
       mapRef.current = null;
@@ -209,7 +211,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map?.isStyleLoaded()) return;
     if (!activityFocus) {
       if (map.getLayer("activity-focus")) map.removeLayer("activity-focus");
       if (map.getSource("activity-focus")) map.removeSource("activity-focus");
@@ -234,7 +236,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getLayer("history")) return;
+    if (!map?.getLayer("history")) return;
     map.setLayoutProperty("history", "icon-image", historyIconImage(pickedId));
     map.setLayoutProperty("history", "symbol-sort-key", historySortKey(pickedId));
   }, [pickedId]);

@@ -8,7 +8,7 @@ docker info >/dev/null 2>&1 || DOCKER=(sudo docker)
 port=$(sed -n 's/^VIEWER_PORT=//p' .env)
 port=${port:-8090}
 
-"${DOCKER[@]}" compose up -d --build --force-recreate viewer watch
+"${DOCKER[@]}" compose up --timeout 3 -d --build --force-recreate viewer watch
 
 for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:$port/metadata" 2>/dev/null; then

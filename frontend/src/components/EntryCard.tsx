@@ -15,19 +15,12 @@ export default function EntryCard({ entry, selected, open = false, top, onSelect
   const hasCount = count > 1;
   const hasIndicators = hasCount || entry.hasRelatedActivity;
   return (
-    <article
+    <button
+      type="button"
       className={`entry${selected ? " entry-selected" : ""}${open ? " entry-open" : ""}${hasIndicators ? " entry-has-indicators" : ""}`}
       style={{ top }}
-      role="button"
-      tabIndex={0}
       aria-label={`${entryTitle(entry)}${entry.hasRelatedActivity ? ", has related suspicious activity" : ""}`}
       onClick={() => onSelect(entry)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(entry);
-        }
-      }}
     >
       <span className={entryIconClass(entry)} />
       <div className="entry-id">{entryTitle(entry)}</div>
@@ -40,6 +33,6 @@ export default function EntryCard({ entry, selected, open = false, top, onSelect
         <span className="entry-date">{formatDate(entry.date)}</span>
         <span className="entry-source">{entry.source.toUpperCase()}</span>
       </div>
-    </article>
+    </button>
   );
 }

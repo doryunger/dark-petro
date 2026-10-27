@@ -33,21 +33,26 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
   const openIndex = openId ? entries.findIndex((e) => e.id === openId) : -1;
   const historyRem = openIndex >= 0 ? historyHeight(history.length || (entries[openIndex].detections ?? 1) - 1) : 0;
   const gap = openIndex >= 0 ? { index: openIndex, height: historyRem * rem } : undefined;
+  const gapIndex = gap?.index;
+  const gapHeight = gap?.height;
   const { start, end } = useVirtualRows(scroller, entries.length, rowHeight, gap);
 
   const pending = useRef<{ id: string; until: number } | null>(null);
+  const previousTab = useRef(tab);
 
   const apply = useCallback(() => {
     const el = scroller.current;
     const wanted = pending.current;
     if (!el || !wanted || Date.now() > wanted.until) return;
     const index = entries.findIndex((e) => e.id === wanted.id);
-    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, rowHeight, el.clientHeight - ROW_TOP_REM * rem, gap);
-  }, [entries, rowHeight, rem, gap?.index, gap?.height]);
+    if (index >= 0) el.scrollTop = revealScrollTop(index, entries.length, rowHeight, el.clientHeight - ROW_TOP_REM * rem, gapIndex !== undefined && gapHeight !== undefined ? { index: gapIndex, height: gapHeight } : undefined);
+  }, [entries, rowHeight, rem, gapIndex, gapHeight]);
 
   useEffect(apply, [apply]);
 
   useEffect(() => {
+    if (previousTab.current === tab) return;
+    previousTab.current = tab;
     pending.current = null;
     if (scroller.current) scroller.current.scrollTop = 0;
   }, [tab]);

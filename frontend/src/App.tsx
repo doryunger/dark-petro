@@ -7,25 +7,42 @@ import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
 import { fetchActivities, fetchActivityImos, fetchMetadata, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
-import { sortEntries } from "./lib/entries";
+import { entryTitle, sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
-import { historyOf, imoOf } from "./lib/groups";
+import { historyOf, imoOf, trackEntry } from "./lib/groups";
 import { trackLine } from "./lib/track";
 import type { ActivityMatch, Entry, Filter, Meta, Order, Tab, TrackPoint } from "./lib/types";
 
-interface SavedSelection {
-  entry: Entry;
-  parent: Entry | null;
-}
-
-interface Selection {
+interface SelectionView {
   entry: Entry | null;
   parent: Entry | null;
   activity: ActivityMatch | null;
-  returnSelection: SavedSelection | null;
+  tab: Tab;
 }
 
-const NOTHING: Selection = { entry: null, parent: null, activity: null, returnSelection: null };
+interface Selection extends SelectionView {
+  back: SelectionView | null;
+  backLabel: string | null;
+}
+
+interface TrackData {
+  imo: string;
+  from: string;
+  to: string;
+  sources: string[];
+  points: TrackPoint[];
+}
+
+const NOTHING: Selection = { entry: null, parent: null, activity: null, tab: "pairs", back: null, backLabel: null };
+
+function selectionView(selection: Selection): SelectionView {
+  return { entry: selection.entry, parent: selection.parent, activity: selection.activity, tab: selection.tab };
+}
+
+function backLabel(view: SelectionView | null): string | null {
+  if (!view?.entry) return null;
+  return view.entry.tab === "pairs" ? view.entry.shortId : entryTitle(view.entry);
+}
 
 function fallbackMeta(): Meta {
   const today = todayUtc();
@@ -39,20 +56,22 @@ export default function App() {
   const [order, setOrder] = useState<Order>("latest");
   const [viewEntries, setViewEntries] = useState<Entry[]>([]);
   const [selection, setSelection] = useState<Selection>(NOTHING);
-  const [track, setTrack] = useState<{ imo: string; points: TrackPoint[] } | null>(null);
+  const [track, setTrack] = useState<TrackData | null>(null);
   const [activityData, setActivityData] = useState<{ imo: string; from: string; to: string; matches: ActivityMatch[] } | null>(null);
   const [activityImoData, setActivityImoData] = useState<{ from: string; to: string; imos: string[] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
   const mapRef = useRef<MapHandle>(null);
   const reelRef = useRef<ReelHandle>(null);
+  const vesselOpenRequest = useRef(0);
   const selectionRef = useRef(selection);
   selectionRef.current = selection;
   const viewRef = useRef(viewEntries);
   viewRef.current = viewEntries;
   const { entry: selected, parent } = selection;
-  const reelEntry = selection.returnSelection?.entry ?? selected;
-  const reelParent = selection.returnSelection?.parent ?? parent;
+  const savedVessel = selected?.tab === "pairs" && selection.back?.entry?.tab === "sanctioned" ? selection.back : null;
+  const reelEntry = savedVessel?.entry ?? selected;
+  const reelParent = savedVessel?.parent ?? parent;
 
   useEffect(() => {
     let alive = true;
@@ -73,16 +92,19 @@ export default function App() {
   }, [meta]);
 
   useEffect(() => {
-    if (!selected || !settled || selection.returnSelection) return;
+    if (!selected || !settled || selection.back) return;
     const picked = parent !== null && selected.id !== parent.id;
     if (picked || viewEntries.some((e) => e.id === selected.id)) return;
     setSelection(NOTHING);
-  }, [viewEntries, selected, parent, settled, selection.returnSelection]);
+  }, [viewEntries, selected, parent, settled, selection.back]);
 
   const openImo = reelParent ? imoOf(reelParent) : null;
-  const activityOwner = selection.returnSelection?.entry ?? selected;
+  const activityOwner = selected?.tab === "sanctioned" ? selected : savedVessel?.entry ?? null;
   const activityImo = activityOwner ? imoOf(activityOwner) : null;
-  const activityFilter = useMemo(() => filter ? { from: filter.from, to: filter.to, sources: [] } : null, [filter?.from, filter?.to]);
+  const activityFrom = filter?.from;
+  const activityTo = filter?.to;
+  const activityFilter = useMemo(() => activityFrom && activityTo ? { from: activityFrom, to: activityTo, sources: [] } : null, [activityFrom, activityTo]);
+  const trackIsCurrent = Boolean(track && filter && track.imo === openImo && track.from === filter.from && track.to === filter.to && track.sources.join(",") === [...filter.sources].sort().join(","));
 
   useEffect(() => {
     if (!activityFilter) {
@@ -101,12 +123,13 @@ export default function App() {
       setTrack(null);
       return undefined;
     }
+    if (trackIsCurrent) return undefined;
     const controller = new AbortController();
     fetchTrack(openImo, filter, controller.signal)
-      .then((points) => setTrack({ imo: openImo, points }))
+      .then((points) => setTrack({ imo: openImo, from: filter.from, to: filter.to, sources: [...filter.sources].sort(), points }))
       .catch(() => undefined);
     return () => controller.abort();
-  }, [openImo, filter]);
+  }, [openImo, filter, trackIsCurrent]);
 
   useEffect(() => {
     if (!activityImo || !activityFilter) {
@@ -120,7 +143,7 @@ export default function App() {
     return () => controller.abort();
   }, [activityImo, activityFilter]);
 
-  const points = useMemo(() => (track && track.imo === openImo ? track.points : []), [track, openImo]);
+  const points = useMemo(() => (trackIsCurrent && track ? track.points : []), [trackIsCurrent, track]);
   const line = useMemo(() => trackLine(points), [points]);
   const others = useMemo(() => points.filter((p) => p.id !== reelParent?.id), [points, reelParent]);
   const history = useMemo(() => (reelParent ? historyOf(points, reelParent.id) : []), [points, reelParent]);
@@ -143,58 +166,95 @@ export default function App() {
   const cardId = reelParent?.id ?? reelEntry?.id ?? null;
 
   const select = useCallback((entry: Entry, fromMap: boolean) => {
+    vesselOpenRequest.current += 1;
     const current = selectionRef.current;
     setTab(entry.tab);
     if (!fromMap && current.parent?.id === entry.id && current.entry?.id === entry.id) {
-      setSelection({ entry, parent: null, activity: null, returnSelection: null });
+      setSelection({ entry, parent: null, activity: null, tab: entry.tab, back: null, backLabel: null });
       return;
     }
-    setSelection({ entry, parent: (entry.detections ?? 1) > 1 ? entry : null, activity: null, returnSelection: null });
+    setSelection({ entry, parent: (entry.detections ?? 1) > 1 ? entry : null, activity: null, tab: entry.tab, back: null, backLabel: null });
     setSettled(!mapRef.current?.flyTo(entry, !viewRef.current.some((e) => e.id === entry.id)));
     if (fromMap) requestAnimationFrame(() => reelRef.current?.reveal(entry.id));
   }, []);
 
   const pick = useCallback((entry: Entry) => {
+    vesselOpenRequest.current += 1;
     setTab(entry.tab);
     const selectionNow = selectionRef.current;
-    const current = selectionNow.returnSelection?.entry ?? selectionNow.entry;
-    const head = selectionNow.returnSelection?.parent ?? selectionNow.parent;
+    const nestedFromVessel = selectionNow.entry?.tab === "pairs" && selectionNow.back?.entry?.tab === "sanctioned";
+    const current = nestedFromVessel ? selectionNow.back?.entry ?? selectionNow.entry : selectionNow.entry;
+    const head = nestedFromVessel ? selectionNow.back?.parent ?? selectionNow.parent : selectionNow.parent;
     if (head && current?.id === entry.id && entry.id !== head.id) {
-      setSelection({ entry: head, parent: head, activity: null, returnSelection: null });
+      setSelection({ entry: head, parent: head, activity: null, tab: entry.tab, back: null, backLabel: null });
       setSettled(!mapRef.current?.flyTo(head, !viewRef.current.some((e) => e.id === head.id)));
       return;
     }
-    setSelection({ entry, parent: head, activity: null, returnSelection: null });
+    const previous = nestedFromVessel ? selectionView(selectionNow) : selectionNow.back;
+    setSelection({ entry, parent: head, activity: null, tab: entry.tab, back: previous, backLabel: backLabel(previous) });
     setSettled(!mapRef.current?.flyTo(entry, true));
   }, []);
 
   const openActivity = useCallback((match: ActivityMatch) => {
-    if (!selected) return;
-    setSelection({ entry: match.entry, parent: null, activity: match, returnSelection: { entry: selected, parent } });
+    vesselOpenRequest.current += 1;
+    const current = selectionRef.current;
+    if (current.entry?.tab !== "sanctioned") return;
+    const previous = selectionView(current);
+    setSelection({ entry: match.entry, parent: null, activity: match, tab: current.tab, back: previous, backLabel: backLabel(previous) });
     setSettled(!mapRef.current?.flyTo(match.entry));
-  }, [selected, parent]);
+  }, []);
 
-  const returnToVessel = useCallback(() => {
-    const saved = selectionRef.current.returnSelection;
-    if (!saved) return;
-    setSelection({ entry: saved.entry, parent: saved.parent, activity: null, returnSelection: null });
-    mapRef.current?.flyTo(saved.entry);
-    setSettled(false);
+  const openSanctionedVessel = useCallback(async (imo: string) => {
+    const current = selectionRef.current;
+    if (current.entry?.tab !== "pairs" || !filter) return;
+    const request = ++vesselOpenRequest.current;
+    const controller = new AbortController();
+    try {
+      const currentTrack = trackIsCurrent && track?.imo === imo ? track : null;
+      const points = currentTrack ? currentTrack.points : await fetchTrack(imo, filter, controller.signal);
+      if (request !== vesselOpenRequest.current || selectionRef.current.entry?.id !== current.entry.id) return;
+      if (!points.length) {
+        setToast("No matching vessel detections in the selected filters.");
+        return;
+      }
+      const vesselEntry = { ...trackEntry(points[0]), detections: points.length };
+      setTrack({ imo, from: filter.from, to: filter.to, sources: [...filter.sources].sort(), points });
+      setViewEntries([]);
+      setTab("sanctioned");
+      const previous = selectionView(current);
+      setSelection({ entry: vesselEntry, parent: vesselEntry, activity: null, tab: "sanctioned", back: previous, backLabel: backLabel(previous) });
+      setSettled(!mapRef.current?.flyTo(vesselEntry));
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setToast("Could not load this vessel's history. Check the connection and try again.");
+    }
+  }, [filter, track, trackIsCurrent]);
+
+  const goBack = useCallback(() => {
+    vesselOpenRequest.current += 1;
+    const current = selectionRef.current;
+    const previous = current.back;
+    if (!previous?.entry) return;
+    setSelection({ ...previous, back: null, backLabel: null });
+    if (previous.tab !== current.tab) setViewEntries([]);
+    setTab(previous.tab);
+    const flew = mapRef.current?.flyTo(previous.entry);
+    setSettled(previous.tab === current.tab ? !flew : false);
   }, []);
 
   const apply = useCallback((next: Filter) => {
+    vesselOpenRequest.current += 1;
     setFilter(next);
     setSelection((current) => {
-      if (current.returnSelection) {
-        const activityInRange = current.entry && current.entry.date >= next.from && current.entry.date <= next.to;
-        const returnMatches = matches(current.returnSelection.entry, next) && (!current.returnSelection.parent || matches(current.returnSelection.parent, next));
-        return activityInRange && returnMatches ? current : NOTHING;
-      }
-      return (current.entry && !matches(current.entry, next)) || (current.parent && !matches(current.parent, next)) ? NOTHING : current;
+      const valid = (view: SelectionView): boolean => {
+        const entryMatches = !view.entry || (view.activity ? view.entry.date >= next.from && view.entry.date <= next.to : matches(view.entry, next));
+        return entryMatches && (!view.parent || matches(view.parent, next));
+      };
+      return valid(current) && (!current.back || valid(current.back)) ? current : NOTHING;
     });
   }, []);
 
   const changeTab = useCallback((next: Tab) => {
+    vesselOpenRequest.current += 1;
     setTab(next);
     setSelection(NOTHING);
     setViewEntries([]);
@@ -223,11 +283,15 @@ export default function App() {
       />
       <Details
         entry={selected}
-        onClose={() => setSelection(NOTHING)}
+        onClose={() => {
+          vesselOpenRequest.current += 1;
+          setSelection(NOTHING);
+        }}
         activityMatches={selected?.tab === "sanctioned" ? activityMatches : []}
-        activityReturn={selection.returnSelection?.entry ?? null}
+        headerBackLabel={selection.backLabel}
         onOpenActivity={openActivity}
-        onReturnVessel={returnToVessel}
+        onOpenSanctionedVessel={openSanctionedVessel}
+        onBack={goBack}
       />
       {filter ? (
         <MapView

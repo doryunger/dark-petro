@@ -61,4 +61,8 @@ cd pipeline && python3 -m unittest discover -s tests -t .
 on the server has to forward the viewer's address to the viewer's loopback port; that config lives on the server, outside this repo. The server's `.env` holds only the
 AWS read keys, region, `STS_BUCKET` and `STS_QUEUE_URL`.
 
+## Checks
+
+Run `./setup-hooks.sh` once in a checkout to install the pre-commit check. It runs `cd frontend && npm run check`, which runs Biome lint, TypeScript typechecking and the frontend tests. The same command runs in the image build and in the GitHub Actions workflow.
+
 Working rules for contributors and agents: [AGENTS.md](AGENTS.md). Design notes and the reasons behind non-obvious choices: [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and [frontend/context/frontend.md](frontend/context/frontend.md).

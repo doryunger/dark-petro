@@ -19,7 +19,8 @@ describe("geo", () => {
 
   it("puts a label at the top centre of an area", () => {
     const sohar = hotSpots.features.find((f) => f.properties.name === "off_sohar");
-    const [lon, lat] = topCenter(sohar!);
+    if (!sohar) throw new Error("Missing off_sohar hot spot");
+    const [lon, lat] = topCenter(sohar);
     expect(lon).toBeCloseTo(57.1, 6);
     expect(lat).toBe(24.9);
   });

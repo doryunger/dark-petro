@@ -19,6 +19,7 @@ services:
     command: ["serve"]
     mem_limit: 320m
     restart: unless-stopped
+    stop_grace_period: 3s
     environment:
       HOME: /tmp
       STS_PORT: "8080"
