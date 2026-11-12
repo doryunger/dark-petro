@@ -10,13 +10,30 @@ RUN=(env)
 docker info >/dev/null 2>&1 || RUN=(sudo env)
 
 cd "$ROOT"
+[ "$(git rev-parse --abbrev-ref HEAD)" = main ] || { echo "deploy from main" >&2; exit 1; }
+[ -z "$(git status --porcelain)" ] || { echo "working tree is not clean" >&2; exit 1; }
+SHA="$(git rev-parse HEAD)"
+[ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SHA" ] || { echo "HEAD is not the tip of origin/main: push it first (with the user's say-so)" >&2; exit 1; }
+REPO_URL="${REPO_URL:-$(git remote get-url origin | sed -E 's#^git@([^:]+):#https://\1/#')}"
+
 "${RUN[@]}" MAPBOX_ACCESS_TOKEN="$MAPBOX_ACCESS_TOKEN" MAPBOX_STYLE="${MAPBOX_STYLE:-}" VIEWER_PORT="$VIEWER_PORT" docker compose build viewer
 "${RUN[@]}" docker run --rm --entrypoint python sts-tiles -m unittest discover -s tests -t .
 
-"${SSH[@]}" mkdir -p sts-viewer/deploy
+"${SSH[@]}" "REPO_URL='$REPO_URL' SHA='$SHA' bash -s" <<'PULL'
+set -euo pipefail
+mkdir -p ~/sts-viewer
+cd ~/sts-viewer
+if [ ! -d .git ]; then
+  git init -q -b main
+  git remote add origin "$REPO_URL"
+  git fetch -q origin main
+  git checkout -q -f -B main origin/main
+fi
+git fetch -q origin main
+git merge -q --ff-only "$SHA"
+test "$(git rev-parse HEAD)" = "$SHA"
+PULL
 "${RUN[@]}" docker save sts-tiles | gzip | "${SSH[@]}" 'gunzip | sudo docker load'
-rsync -az -e "ssh -i $KEY" "$ROOT"/deploy/sts-tiles.service "$ROOT/deploy/sts-tiles.timer" "$HOST:sts-viewer/deploy/"
-rsync -az -e "ssh -i $KEY" "$ROOT/compose.yaml" "$HOST:sts-viewer/compose.yaml"
 
 "${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' bash -s" <<'REMOTE'
 set -euo pipefail

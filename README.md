@@ -59,7 +59,7 @@ cp deploy/deploy.env.example deploy/deploy.env
 cd pipeline && python3 -m unittest discover -s tests -t .
 ```
 
-`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` copies the sources over, builds the image there (the app is built inside it), runs the Python tests in it, starts the viewer and the listener with `docker compose`, installs the hourly systemd timer and runs the pipeline once. The proxy
+`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` refuses to run unless the tree is clean on `main` and HEAD is the tip of `origin/main`. It builds the image locally (the app is built inside it) and runs the Python tests in it. On the server, `~/sts-viewer` is a git checkout: the script fast-forwards it to that exact commit with `git pull`-style fetch and merge (no files are copied around Git), so `compose.yaml` and the systemd units come from the repo. The image is forwarded with `docker save`, the viewer, watcher and listener are restarted, the hourly systemd timer is installed and the pipeline runs once. The proxy
 on the server has to forward the viewer's address to the viewer's loopback port; that config lives on the server, outside this repo. The server's `.env` holds only the
 AWS read keys, region, `STS_BUCKET` and `STS_QUEUE_URL`.
 

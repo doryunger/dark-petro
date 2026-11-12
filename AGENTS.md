@@ -23,6 +23,7 @@ Write every line as if it were already on the front page.
    public repo a push is publication. VS Code's background sync can push on its own, so before any commit or push check
    `git status -sb` and `git ls-remote origin`.
 4. **No comments in code files**, anywhere (see below).
+5. **Everything on the server except the Docker image comes from GitHub.** `~/sts-viewer` is a git checkout and is updated only with `git fetch` and a fast-forward to a pushed commit. Never `rsync`, `scp`, `cat >` or hand-edit repo files on the server, in a script or ad hoc. A change goes: commit, push (with the user's say-so), pull on the server.
 
 Before every commit, inspect `git status --short`, `git diff --cached --name-only`, the staged diff and the commit message
 for IP addresses, host names, account ids, key paths, PEM blocks, tokens and passwords, and run `git check-ignore -v deploy/deploy.env .env`. Ignore
@@ -65,6 +66,7 @@ build the image on the dev machine and forward it to the server: `./deploy/deplo
 the image locally (the frontend check runs inside the build), runs the Python tests in it, ships it with `docker save`, and
 restarts the viewer, watcher and listener. It needs the git-ignored `deploy/deploy.env` and Docker on the dev machine.
 
+- Everything except the image reaches the server through Git: `~/sts-viewer` is a clone, `deploy.sh` fast-forwards it to the pushed commit. Never `rsync`/`scp` repo files to the server, and never edit them there. A deploy needs the commit pushed to `origin/main` first, which needs the user's explicit say-so.
 - Never build the image on the server: it has about 2 GB of RAM shared with the monitor app, the job manager, Postgres and the
   proxy.
 - If Docker is missing locally, stop and ask the user to install it (it needs `sudo`, which agents do not have); do not
