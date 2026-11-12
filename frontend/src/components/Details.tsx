@@ -43,6 +43,14 @@ function Capture({ image, alt }: { image: string | null; alt: string }) {
   );
 }
 
+function DetailsHeading() {
+  return (
+    <div className="details-heading">
+      <h2 className="details-title">Details</h2>
+    </div>
+  );
+}
+
 interface Props {
   entry: Entry | null;
   onClose: () => void;
@@ -54,16 +62,24 @@ interface Props {
 }
 
 export default function Details({ entry, onClose, activityMatches, headerBackLabel, onOpenActivity, onOpenSanctionedVessel, onBack }: Props) {
-  if (!entry) return <section className="details" />;
+  if (!entry) {
+    return (
+      <section className="details">
+        <DetailsHeading />
+        <p className="details-placeholder">Select a finding from the list or the map to see its capture and details here.</p>
+      </section>
+    );
+  }
   const headerTail = entry.tab === "pairs" ? entry.shortId : entryTitle(entry);
   const primaryVessel = entry.vessels[0];
   return (
     <section className="details">
-      <header className="details-header">
+      <DetailsHeading />
+      <header className="details-entry">
         <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />
-        <h2 className="details-id">
+        <h3 className="details-id">
           {headerBackLabel ? <><button className="details-vessel-link" type="button" onClick={onBack}>{headerBackLabel}</button>/{headerTail}</> : entryTitle(entry)}
-        </h2>
+        </h3>
         <button className="details-close" type="button" aria-label="Close" onClick={onClose}>
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
             <path className="close-outline" d="M3 3L13 13M13 3L3 13" />

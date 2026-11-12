@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryIconClass, entryTitle, hotSpotLabel, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import { entryIconClass, entryTitle, hotSpotLabel, pinFirst, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
 import type { Entry, TileFeature } from "./types";
 
 const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
@@ -72,5 +72,14 @@ describe("entries", () => {
     expect(sortEntries(list, "latest").map((e) => e.id)).toEqual(["c", "a", "b", "d"]);
     expect(sortEntries(list, "oldest").map((e) => e.id)).toEqual(["d", "a", "b", "c"]);
     expect(list.map((e) => e.id)).toEqual(["b", "a", "c", "d"]);
+  });
+
+  it("moves the pinned entry to the front and leaves the order of the rest", () => {
+    const list = [{ id: "c" }, { id: "a" }, { id: "b" }, { id: "d" }] as Entry[];
+    expect(pinFirst(list, "b").map((e) => e.id)).toEqual(["b", "c", "a", "d"]);
+    expect(pinFirst(list, "c")).toBe(list);
+    expect(pinFirst(list, "x")).toBe(list);
+    expect(pinFirst(list, null)).toBe(list);
+    expect(list.map((e) => e.id)).toEqual(["c", "a", "b", "d"]);
   });
 });

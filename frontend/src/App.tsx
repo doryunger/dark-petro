@@ -7,7 +7,7 @@ import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
 import { fetchActivities, fetchActivityImos, fetchMetadata, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
-import { entryTitle, sortEntries } from "./lib/entries";
+import { entryTitle, pinFirst, sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
 import { historyOf, imoOf, trackEntry } from "./lib/groups";
 import { trackLine } from "./lib/track";
@@ -91,13 +91,6 @@ export default function App() {
     if (meta) setFilter(defaultFilter(todayUtc(), meta.sources));
   }, [meta]);
 
-  useEffect(() => {
-    if (!selected || !settled || selection.back) return;
-    const picked = parent !== null && selected.id !== parent.id;
-    if (picked || viewEntries.some((e) => e.id === selected.id)) return;
-    setSelection(NOTHING);
-  }, [viewEntries, selected, parent, settled, selection.back]);
-
   const openImo = reelParent ? imoOf(reelParent) : null;
   const activityOwner = selected?.tab === "sanctioned" ? selected : savedVessel?.entry ?? null;
   const activityImo = activityOwner ? imoOf(activityOwner) : null;
@@ -152,24 +145,28 @@ export default function App() {
   const activityImosCurrent = Boolean(activityImoData && activityFilter && activityImoData.from === activityFilter.from && activityImoData.to === activityFilter.to);
   const activityImos = useMemo(() => new Set(activityImosCurrent && activityImoData ? activityImoData.imos : []), [activityImosCurrent, activityImoData]);
 
+  const cardEntry = reelParent ?? reelEntry;
+  const cardId = cardEntry?.id ?? null;
+  const cardMissing = Boolean(cardEntry && !viewEntries.some((e) => e.id === cardEntry.id));
+  const pinnedId = cardMissing && settled ? cardId : null;
+
   const entries = useMemo(() => {
-    const shown = reelParent && !viewEntries.some((e) => e.id === reelParent.id) ? [...viewEntries, reelParent] : viewEntries;
+    const shown = cardEntry && cardMissing ? [...viewEntries, cardEntry] : viewEntries;
     const decorated = shown.map((entry) => {
       if (entry.tab !== "sanctioned") return entry;
       const imo = entry.vessels[0]?.imo;
       return { ...entry, hasRelatedActivity: Boolean(imo && activityImos.has(imo)) };
     });
-    return sortEntries(decorated, order);
-  }, [viewEntries, reelParent, activityImos, order]);
+    return pinFirst(sortEntries(decorated, order), pinnedId);
+  }, [viewEntries, cardEntry, cardMissing, pinnedId, activityImos, order]);
 
   const pickedId = reelParent && reelEntry && reelEntry.id !== reelParent.id ? reelEntry.id : null;
-  const cardId = reelParent?.id ?? reelEntry?.id ?? null;
 
   const select = useCallback((entry: Entry, fromMap: boolean) => {
     vesselOpenRequest.current += 1;
     const current = selectionRef.current;
     setTab(entry.tab);
-    if (!fromMap && current.parent?.id === entry.id && current.entry?.id === entry.id) {
+    if (!fromMap && current.parent?.id === entry.id && current.entry?.id === entry.id && viewRef.current.some((e) => e.id === entry.id)) {
       setSelection({ entry, parent: null, activity: null, tab: entry.tab, back: null, backLabel: null });
       return;
     }
@@ -223,7 +220,8 @@ export default function App() {
       setTab("sanctioned");
       const previous = selectionView(current);
       setSelection({ entry: vesselEntry, parent: vesselEntry, activity: null, tab: "sanctioned", back: previous, backLabel: backLabel(previous) });
-      setSettled(!mapRef.current?.flyTo(vesselEntry));
+      mapRef.current?.flyTo(vesselEntry);
+      setSettled(false);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setToast("Could not load this vessel's history. Check the connection and try again.");
     }
@@ -273,6 +271,7 @@ export default function App() {
         onTab={changeTab}
         entries={entries}
         selectedId={cardId}
+        pinnedId={pinnedId}
         openId={reelParent?.id ?? null}
         history={history}
         pickedId={pickedId}

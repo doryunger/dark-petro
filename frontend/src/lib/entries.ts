@@ -94,6 +94,12 @@ export function uniqueEntries(features: TileFeature[], tab: Tab = "pairs"): Entr
   return [...seen.values()];
 }
 
+export function pinFirst(entries: Entry[], id: string | null): Entry[] {
+  const index = id ? entries.findIndex((e) => e.id === id) : -1;
+  if (index <= 0) return entries;
+  return [entries[index], ...entries.slice(0, index), ...entries.slice(index + 1)];
+}
+
 export function sortEntries(entries: Entry[], order: Order): Entry[] {
   const sign = order === "oldest" ? 1 : -1;
   return [...entries].sort((a, b) => sign * (a.t - b.t) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));

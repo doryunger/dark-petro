@@ -17,6 +17,7 @@ interface Props {
   onTab: (tab: Tab) => void;
   entries: Entry[];
   selectedId: string | null;
+  pinnedId?: string | null;
   openId?: string | null;
   history?: Entry[];
   pickedId?: string | null;
@@ -26,7 +27,7 @@ interface Props {
   onSelect: (entry: Entry) => void;
 }
 
-const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, selectedId, openId = null, history = [], pickedId = null, onPick, order, onOrder, onSelect }, ref) {
+const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, selectedId, pinnedId = null, openId = null, history = [], pickedId = null, onPick, order, onOrder, onSelect }, ref) {
   const scroller = useRef<HTMLDivElement>(null);
   const rem = remPx();
   const rowHeight = ROW_HEIGHT_REM * rem;
@@ -56,6 +57,12 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
     pending.current = null;
     if (scroller.current) scroller.current.scrollTop = 0;
   }, [tab]);
+
+  useEffect(() => {
+    if (!pinnedId) return;
+    pending.current = null;
+    if (scroller.current) scroller.current.scrollTop = 0;
+  }, [pinnedId]);
 
   useImperativeHandle(
     ref,
@@ -93,7 +100,7 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
               const top = ROW_TOP_REM + rowOffset(start + i, ROW_HEIGHT_REM, openIndex >= 0 ? { index: openIndex, height: historyRem } : undefined);
               return (
                 <Fragment key={entry.id}>
-                  <EntryCard entry={entry} selected={entry.id === selectedId} open={entry.id === openId} top={`${top}rem`} onSelect={onSelect} />
+                  <EntryCard entry={entry} selected={entry.id === selectedId} pinned={entry.id === pinnedId} open={entry.id === openId} top={`${top}rem`} onSelect={onSelect} />
                   {entry.id === openId && onPick && <History key={entry.id} items={history} pickedId={pickedId} top={`${top + ENTRY_HEIGHT_REM}rem`} height={historyRem} onPick={onPick} />}
                 </Fragment>
               );
