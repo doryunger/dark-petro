@@ -15,7 +15,7 @@ here:
   origin` before committing.
 - **Never copy files to the server (no `rsync`, `scp`, redirected writes or manual edits of repo files there).** Everything except
   the Docker image reaches the server by `git pull` (fetch and fast-forward) of a commit that is on GitHub, in the git checkout at
-  `~/sts-viewer`.
+  `~/dark-petro`.
 - **No code comments.** The reasons go in `context/<component>.md`.
 - **Deploying:** only when asked, from committed `main`: build the image locally and forward it to the server with
   `./deploy/deploy.sh` (see "Deploying" in `AGENTS.md`). Never build on the server; if local Docker is missing, ask the user.

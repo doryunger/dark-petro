@@ -21,8 +21,8 @@ REPO_URL="${REPO_URL:-$(git remote get-url origin | sed -E 's#^git@([^:]+):#http
 
 "${SSH[@]}" "REPO_URL='$REPO_URL' SHA='$SHA' bash -s" <<'PULL'
 set -euo pipefail
-mkdir -p ~/sts-viewer
-cd ~/sts-viewer
+mkdir -p ~/dark-petro
+cd ~/dark-petro
 if [ ! -d .git ]; then
   git init -q -b main
   git remote add origin "$REPO_URL"
@@ -37,7 +37,7 @@ PULL
 
 "${SSH[@]}" "QUEUE_URL='$STS_QUEUE_URL' CREDENTIALS_SOURCE='$CREDENTIALS_SOURCE' VIEWER_PORT='$VIEWER_PORT' bash -s" <<'REMOTE'
 set -euo pipefail
-cd ~/sts-viewer
+cd ~/dark-petro
 APP_DIR="$PWD"
 mkdir -p data
 if [ ! -f .env ]; then
