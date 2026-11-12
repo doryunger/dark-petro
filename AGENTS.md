@@ -29,6 +29,30 @@ Before every commit, inspect `git status --short`, `git diff --cached --name-onl
 for IP addresses, host names, account ids, key paths, PEM blocks, tokens and passwords, and run `git check-ignore -v deploy/deploy.env .env`. Ignore
 rules do not protect files Git already tracks.
 
+## Workflow
+
+Everything moves in one direction: dev machine, then GitHub, then the server.
+
+1. Work and test on the dev machine: `cd frontend && npm run check`, and the Python tests inside the image (the host has no
+   DuckDB), which `deploy.sh` also runs.
+2. Commit on `main` after the pre-commit inspection above. Author is the user, no trailers.
+3. Push only when the user says so in the conversation; confirm with `git ls-remote origin refs/heads/main`.
+4. Deploy only when the user asks (see "Deploying"): the image is built locally and forwarded, everything else is fetched by
+   the server from GitHub.
+
+On the server:
+
+| Path | What | How it changes |
+|---|---|---|
+| `~/dark-petro/` | Git checkout of this repo (`compose.yaml`, `deploy/`, `pipeline/`, `frontend/`) | Only `deploy.sh`: fetch and fast-forward to the pushed commit |
+| `~/dark-petro/.env`, `~/dark-petro/data/` | Credentials and pipeline output; untracked, git-ignored | Created once by `deploy.sh`; the pipeline writes `data/` |
+| `/etc/systemd/system/sts-tiles.{service,timer}` | Hourly pipeline units, rendered from `deploy/` | Reinstalled by `deploy.sh` |
+| Docker image `sts-tiles` | The viewer, pipeline and app | Built locally, sent with `docker save` |
+
+The proxy (Caddy, `sts-proxy.service`), the monitor app, job manager and Postgres belong to the `maritime-sts-monitor` repo.
+Do not edit its files or its installed units from here; read them, and ask the user before touching anything shared.
+Backups of anything changed outside this repo go in a folder in the home directory, not into the checkout.
+
 ## Code
 
 **No comments in code files** — no inline `#`/`//` comments, no explanatory docstrings, in any language. For the "why"
