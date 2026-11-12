@@ -14,3 +14,8 @@ here:
 - **No push, force-push or history rewrite unless the user explicitly says so in the conversation.** Check `git ls-remote
   origin` before committing.
 - **No code comments.** The reasons go in `context/<component>.md`.
+- **Server access:** the control host's `host`, `user` and `identity_file` are in the git-ignored
+  `deploy/control_host.json` (see "Server access" in `AGENTS.md`). Read it from there, never copy its values elsewhere.
+
+Replies must be short and informative: the answer first, only what the user needs to know or decide, long material in a repo
+file with a link.

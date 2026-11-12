@@ -48,6 +48,14 @@ because it can change data; never route the viewer to it or share its credential
 RAM. Give new services a memory cap, validate proxy config before reloading it, keep a backup of any file on the server you
 change outside this repo, and tell the user when something shared will restart.
 
+## Server access
+
+The control host (the server that runs the viewer, the listener and the data) is described by the git-ignored
+`deploy/control_host.json`: `host`, `user` and `identity_file`. Read that file for every SSH or rsync call (`ssh -i
+<identity_file> <user>@<host>`) and never copy its values into a tracked file, a commit message or a reply. The app's data
+lives on it under `~/sts-viewer/data` (`current/` is a symlink to the newest build, `mirror/captures/` holds the captures).
+Reading and copying are fine; anything that restarts or changes something shared needs the user's say-so first.
+
 ## If sensitive material reaches a commit
 
 Remove it from the tree, check whether it is still reachable in history (local and remote), and tell the user plainly. Do
@@ -55,7 +63,7 @@ not call it hidden while it is reachable. Rewriting pushed history needs the con
 
 ## Working style
 
-- Reply style: answer first, a few lines at most, no padding. One small table or short list only when it carries real data.
+- Reply style: short and informative. Answer first, a few lines at most, no padding, no recap of what the user already knows. One small table or short list only when it carries real data.
   Put long material in a repo file and link it.
 - Prefer actually running the thing over predicting its outcome: "let's check" beats "I'd expect". After a deploy, check the
   live URL, not only the exit code.
