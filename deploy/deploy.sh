@@ -46,6 +46,7 @@ if [ ! -f .env ]; then
   sed -n 's/^S3_BUCKET_NAME=/STS_BUCKET=/p' "$CREDENTIALS_SOURCE" >> .env
 fi
 grep -q '^STS_QUEUE_URL=' .env || echo "STS_QUEUE_URL=$QUEUE_URL" >> .env
+grep -q '^VIEWER_PORT=' .env || echo "VIEWER_PORT=$VIEWER_PORT" >> .env
 for unit in sts-tiles.service sts-tiles.timer; do
   sed "s#@APP_DIR@#$APP_DIR#g" "deploy/$unit" | sudo tee "/etc/systemd/system/$unit" > /dev/null
 done

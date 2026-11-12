@@ -1,4 +1,4 @@
-# STS viewer
+# Dark Petro
 
 Public map viewer for the ship-to-ship findings published by `maritime-sts-monitor` (its PLAN stage 8). Findings are
 read from the Parquets that project's worker writes to S3; the viewer never writes to them. The monitor app and its
@@ -59,9 +59,10 @@ cp deploy/deploy.env.example deploy/deploy.env
 cd pipeline && python3 -m unittest discover -s tests -t .
 ```
 
-`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` refuses to run unless the tree is clean on `main` and HEAD is the tip of `origin/main`. It builds the image locally (the app is built inside it) and runs the Python tests in it. On the server, `~/dark-petro` is a git checkout: the script fast-forwards it to that exact commit with `git pull`-style fetch and merge (no files are copied around Git), so `compose.yaml` and the systemd units come from the repo. The image is forwarded with `docker save`, the viewer, watcher and listener are restarted, the hourly systemd timer is installed and the pipeline runs once. The proxy
-on the server has to forward the viewer's address to the viewer's loopback port; that config lives on the server, outside this repo. The server's `.env` holds only the
-AWS read keys, region, `STS_BUCKET` and `STS_QUEUE_URL`.
+`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` refuses to run unless the tree is clean on `main` and HEAD is the tip of `origin/main`. It builds the image locally (the app is built inside it) and runs the Python tests in it. On the server, `~/dark-petro` is a git checkout: the script fast-forwards it to that exact commit with `git pull`-style fetch and merge (no files are copied around Git), so `compose.yaml` and the systemd units come from the repo. The image is forwarded with `docker save`, the viewer, watcher and listener are restarted, the hourly systemd timer is installed and the pipeline runs once. The proxy (Caddy) is owned by the `maritime-sts-monitor` repo (`deploy/proxy/`): it forwards the viewer's address to the viewer's loopback port. The server's `.env` holds the
+AWS read keys, region, `STS_BUCKET`, `STS_QUEUE_URL` and `VIEWER_PORT`.
+
+Starting or restarting the services on the server never builds: `docker compose --profile ingest up -d --no-build viewer watch listener` (or `./restart.sh`, which does exactly that and waits for `/metadata`) uses the `sts-tiles` image that `deploy.sh` loaded. The listener is started by Compose only; there is no systemd unit for it. The hourly pipeline run is `deploy/sts-tiles.service` and `deploy/sts-tiles.timer`, which this repo owns and `deploy.sh` installs.
 
 ## Checks
 
