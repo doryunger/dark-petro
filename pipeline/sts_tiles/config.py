@@ -16,6 +16,7 @@ class Config:
     duckdb_memory: str
     watch_s: float
     sanctioned_prefix: str = "sanctioned/"
+    hotspots_key: str = "hotspots/sts_hotspots.json"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -31,6 +32,7 @@ class Config:
             duckdb_memory=os.environ.get("STS_DUCKDB_MEMORY", "200MB"),
             watch_s=float(os.environ.get("STS_WATCH_S", "5")),
             sanctioned_prefix=os.environ.get("STS_SANCTIONED_PREFIX", "sanctioned/"),
+            hotspots_key=os.environ.get("STS_HOTSPOTS_KEY", "hotspots/sts_hotspots.json"),
         )
 
     @property
@@ -40,6 +42,10 @@ class Config:
     @property
     def mirror(self) -> Path:
         return self.data_dir / "mirror"
+
+    @property
+    def hotspots_file(self) -> Path:
+        return self.mirror / "hotspots.json"
 
     @property
     def builds(self) -> Path:

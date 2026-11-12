@@ -30,6 +30,11 @@ def spatial_available() -> bool:
         return False
 
 
+HOT_SPOTS = {"type": "FeatureCollection", "features": [
+    {"type": "Feature", "properties": {"name": "sikka_vadinar", "label": "Sikka"}, "geometry": {"type": "Polygon", "coordinates": [[[69.3, 22.35], [70.0, 22.35], [70.0, 22.68], [69.3, 22.68], [69.3, 22.35]]]}},
+]}
+
+
 def finding(n: int, source: str, day: int, **over) -> dict:
     base = {
         "finding_id": f"{source}_202610{day:02d}T060000_{n}", "lat": 24.6 + n / 1000, "lon": 57.5 + n / 1000, "hot_spot": "off_sohar", "source": source,
@@ -136,6 +141,7 @@ class Serving(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name)
         make_data(root, [finding(1, "s1", 10), finding(2, "s2", 20), finding(3, "s2", 22, vessel_1_lat=None)], [sanctioned_finding(1, "s1", 12), sanctioned_finding(2, "s1", 21)])
+        (root / "builds" / "b1" / "hot_spots.json").write_text(json.dumps(HOT_SPOTS))
         cls.cfg = make_config(root)
         cls.store = V.Store(cls.cfg)
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), V.make_handler(cls.store))
@@ -160,6 +166,11 @@ class Serving(unittest.TestCase):
         status, _, body = self.get("/metadata")
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body), {"min_date": "2026-10-10", "max_date": "2026-10-22", "sources": ["s1", "s2"]})
+
+    def test_hot_spots_are_served_from_the_build(self):
+        status, headers, body = self.get("/hot-spots")
+        self.assertEqual((status, headers["Cache-Control"], headers["Content-Type"]), (200, "no-cache", "application/json"))
+        self.assertEqual(json.loads(body), HOT_SPOTS)
 
     def test_tile_carries_every_attribute_the_app_reads(self):
         status, headers, body = self.get("/tiles/0/0/0.mvt")
@@ -312,6 +323,27 @@ class BuildWithoutSanctioned(unittest.TestCase):
             self.assertEqual(store.tile("sanctioned", 0, 0, 0, {"from": None, "to": None, "sources": None}), b"")
             self.assertTrue(store.tile("pairs", 0, 0, 0, {"from": None, "to": None, "sources": None}))
             self.assertEqual(store.track("9257149", {"from": None, "to": None, "sources": None}), [])
+
+    def test_a_build_from_before_the_areas_gives_an_empty_collection_and_no_build_gives_unavailable(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            make_data(root, [finding(1, "s1", 10)])
+            server = ThreadingHTTPServer(("127.0.0.1", 0), V.make_handler(V.Store(make_config(root))))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+                conn.request("GET", "/hot-spots")
+                r = conn.getresponse()
+                self.assertEqual((r.status, json.loads(r.read())), (200, {"type": "FeatureCollection", "features": []}))
+                (root / "current").unlink()
+                conn.request("GET", "/hot-spots")
+                r = conn.getresponse()
+                self.assertEqual(r.status, 503)
+                r.read()
+                conn.close()
+            finally:
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == "__main__":

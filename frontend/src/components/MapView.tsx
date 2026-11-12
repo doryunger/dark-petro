@@ -1,6 +1,5 @@
 import { AttributionControl, Map as MapboxMap, Marker, NavigationControl, Popup, ScaleControl, type GeoJSONSource } from "mapbox-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
-import hotSpots from "../data/hot_spots.json";
 import { FLY_ZOOM, MAX_TILE_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
 import { toEntry, uniqueEntries } from "../lib/entries";
 import { activityTileUrl, tileUrl } from "../lib/filters";
@@ -11,7 +10,7 @@ import { HOT_SPOT_LINE, TRACK_LINE, activityFocusLayer, historyIconImage, histor
 import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
 import { historyPoints } from "../lib/track";
-import type { Entry, Filter, Order, Tab, TileFeature, TrackLine, TrackPoint } from "../lib/types";
+import type { Entry, Filter, HotSpotCollection, Order, Tab, TileFeature, TrackLine, TrackPoint } from "../lib/types";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const STYLE = import.meta.env.VITE_MAPBOX_STYLE;
@@ -22,6 +21,7 @@ export interface MapHandle {
 }
 
 interface Props {
+  hotSpots: HotSpotCollection;
   tab: Tab;
   track: TrackLine;
   history: TrackPoint[];
@@ -38,12 +38,12 @@ interface Props {
   children?: ReactNode;
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
   const signature = useRef("");
-  const latest = useRef({ tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
-  latest.current = { tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
+  const latest = useRef({ hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled });
+  latest.current = { hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, order, selectedId, onSelect, onEntries, onError, onSettled };
 
   useImperativeHandle(ref, () => ({
     flyTo(entry, always = false) {
@@ -77,12 +77,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
       attributionControl: false,
     });
     mapRef.current = map;
+    const areas = latest.current.hotSpots;
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
     map.addControl(new AttributionControl({ compact: false }), "bottom-right");
 
-    const labels = hotSpots.features.map((feature) => {
+    const labels = areas.features.map((feature) => {
       const label = document.createElement("div");
       label.className = "hot-spot-label";
       label.textContent = feature.properties.label;
@@ -91,7 +92,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
 
     const setup = async () => {
       await addMapImages(map);
-      if (!map.getSource("hot-spots")) map.addSource("hot-spots", { type: "geojson", data: hotSpots });
+      if (!map.getSource("hot-spots")) map.addSource("hot-spots", { type: "geojson", data: areas });
       if (!map.getLayer(HOT_SPOT_LINE.id)) map.addLayer(HOT_SPOT_LINE);
       if (!map.getSource("track")) map.addSource("track", { type: "geojson", data: latest.current.track });
       if (!map.getLayer(TRACK_LINE.id)) map.addLayer(TRACK_LINE);
@@ -134,7 +135,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ tab, track, hist
     map.on("idle", () => schedule(true));
     map.on("moveend", () => schedule(false));
 
-    map.fitBounds(featureBounds(hotSpots), { padding: 48, maxZoom: START_MAX_ZOOM, duration: 0 });
+    const start = featureBounds(areas);
+    if (start) map.fitBounds(start, { padding: 48, maxZoom: START_MAX_ZOOM, duration: 0 });
 
     const entryOf = (feature: TileFeature & { layer: { id: string } }, layer: Tab): Entry | null => {
       if (feature.layer.id !== "history") return toEntry(feature, layer);

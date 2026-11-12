@@ -1,8 +1,7 @@
-import hotSpots from "../data/hot_spots.json";
 import { SOURCE_NAMES } from "./constants";
-import type { ActivityMatch, ActivityRecord, Entry, Order, Tab, TileFeature, Vessel } from "./types";
+import type { ActivityMatch, ActivityRecord, Entry, HotSpotCollection, Order, Tab, TileFeature, Vessel } from "./types";
 
-const LABELS = Object.fromEntries(hotSpots.features.map((f) => [f.properties.name, f.properties.label])) as Record<string, string>;
+let labels: Record<string, string> = {};
 
 export function shortId(id: string): string {
   return id.split("_").slice(2).join("_").replace(/^w\d+-/, "");
@@ -21,8 +20,13 @@ export function entryIconClass(entry: Pick<Entry, "tab" | "sanctioned">): string
   return `entry-icon${kind}${entry.sanctioned ? " entry-icon-sanctioned" : ""}`;
 }
 
+export function setHotSpotLabels(collection: HotSpotCollection): void {
+  labels = Object.fromEntries(collection.features.map((feature) => [feature.properties.name, feature.properties.label]));
+}
+
 export function hotSpotLabel(name: string | null | undefined): string {
-  return name ? (LABELS[name] ?? name) : "";
+  if (!name) return "";
+  return labels[name] ?? name.split("_").filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
 }
 
 function vessel(p: TileFeature["properties"], n: 1 | 2): Vessel {

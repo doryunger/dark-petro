@@ -107,11 +107,13 @@ export interface TileFeature {
 }
 
 export interface HotSpotFeature {
+  type: "Feature";
   properties: { name: string; label: string };
-  geometry: { coordinates: number[][][] };
+  geometry: { type: "Polygon"; coordinates: number[][][] };
 }
 
 export interface HotSpotCollection {
+  type: "FeatureCollection";
   features: HotSpotFeature[];
 }
 

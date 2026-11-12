@@ -89,7 +89,7 @@ def summary(rows: list[dict]) -> dict:
     }
 
 
-def build(cfg, inputs: dict[str, str], rows: list[dict], sanctioned: list[dict], missing_captures: list[str]) -> Path:
+def build(cfg, inputs: dict[str, str], rows: list[dict], sanctioned: list[dict], missing_captures: list[str], hot_spots: dict | None = None) -> Path:
     digest = F.input_hash(inputs)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     name = f"{stamp}-{digest[:12]}"
@@ -100,13 +100,14 @@ def build(cfg, inputs: dict[str, str], rows: list[dict], sanctioned: list[dict],
     try:
         write_table(rows, work / "findings.parquet")
         write_table(sanctioned, work / "sanctioned.parquet", SANCTIONED_TYPES)
+        (work / "hot_spots.json").write_text(json.dumps(hot_spots or F.hot_spots(None)))
         manifest = {
             "build_id": name,
             "built_utc": datetime.now(timezone.utc).isoformat(),
             "input_hash": digest,
             "inputs": [{"key": k, "sha256": inputs[k]} for k in sorted(inputs)],
             "missing_captures": missing_captures,
-            "files": {"table": "findings.parquet", "sanctioned": "sanctioned.parquet", "capture_root": "mirror/"},
+            "files": {"table": "findings.parquet", "sanctioned": "sanctioned.parquet", "hot_spots": "hot_spots.json", "capture_root": "mirror/"},
             **summary(rows),
             "sanctioned": summary(sanctioned),
         }

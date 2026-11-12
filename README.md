@@ -16,7 +16,8 @@ Runs on every S3 publish (an SQS event reaches `sts-tiles-listener`) and hourly 
 1. List `sts/**.parquet` (pairs) and `sanctioned/**.parquet` (single sanctioned vessels) in the bucket. Download every key whose ETag changed since the last run into `data/mirror/`, drop
    keys gone from S3 (`data/state.json` holds key to ETag). The worker rewrites these files in place, so a changed ETag is
    the only delta signal.
-2. If the hash of all mirrored files' contents and the schema version equals the live build's `input_hash`, stop.
+   Also fetch the monitor's published hot-spot list (the names and boxes of the areas) into `data/mirror/hotspots.json`; if that fails the last good copy stays.
+2. If the hash of all mirrored files' contents (the hot-spot list included) and the schema version equals the live build's `input_hash`, stop.
 3. Otherwise read all rows (DuckDB), dedupe on `finding_id`, mirror the PNGs they reference, and write one public-safe
    `findings.parquet` in a new `data/builds/<stamp>-<hash>/`.
 4. Swap `data/current` to the new build in one rename; keep the last 5 builds.
@@ -27,6 +28,7 @@ Output under the server's `sts-viewer/data/`:
 |---|---|
 | `current/findings.parquet` | One row per pair finding, internal columns removed |
 | `current/sanctioned.parquet` | One row per sanctioned-vessel finding, internal columns removed (empty when there are none) |
+| `current/hot_spots.json` | The hot-spot areas (name and box only), served at `/hot-spots` |
 | `current/manifest.json` | Build id, inputs and their SHA-256, counts per hot spot / source / QA status, time range, bounds |
 | `mirror/captures/...` | The capture PNGs, at their S3 keys |
 | `status.json` | Result of the last run (`built`, `up_to_date`, `skipped_empty`, `failed`) |

@@ -22,6 +22,24 @@ def write_atomic(path: Path, data: bytes, mtime: float | None = None) -> None:
     os.replace(tmp, path)
 
 
+def sync_hotspots(s3, bucket: str, key: str, target: Path) -> str:
+    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    json.loads(body)
+    if target.exists() and target.read_bytes() == body:
+        return "unchanged"
+    write_atomic(target, body)
+    log.info("fetched %s", key)
+    return "fetched"
+
+
+def refresh_hotspots(s3, bucket: str, key: str, target: Path) -> str:
+    try:
+        return sync_hotspots(s3, bucket, key, target)
+    except Exception as e:
+        log.warning("hot spots not refreshed (%s: %s)", type(e).__name__, str(e)[:200])
+        return "failed"
+
+
 def list_parquets(s3, bucket: str, prefixes: tuple[str, ...]) -> dict[str, str]:
     keys = {}
     for prefix in prefixes:

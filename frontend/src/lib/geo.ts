@@ -5,7 +5,7 @@ export function shouldFly(zoom: number): boolean {
   return zoom <= FLY_UP_TO_ZOOM;
 }
 
-export function featureBounds(collection: HotSpotCollection): Bounds {
+export function featureBounds(collection: HotSpotCollection): Bounds | null {
   let west = Infinity;
   let south = Infinity;
   let east = -Infinity;
@@ -20,7 +20,7 @@ export function featureBounds(collection: HotSpotCollection): Bounds {
       }
     }
   }
-  return [[west, south], [east, north]];
+  return Number.isFinite(west) ? [[west, south], [east, north]] : null;
 }
 
 export function topCenter(feature: HotSpotFeature): LngLat {

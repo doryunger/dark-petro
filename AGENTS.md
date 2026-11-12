@@ -1,9 +1,10 @@
 # Working conventions for this repo
 
 These rules apply to every coding agent working here. For what the project is, see `README.md`; this file is about *how to
-work on it*. The repo is self-contained: the only things outside it are the findings Parquets that
-`maritime-sts-monitor` publishes to S3 and the proxy on the server. No code or files are shared with that repo; anything
-needed from it is copied in and owned here.
+work on it*. The repo is self-contained: the only things outside it are the findings Parquets and the hot-spot list that
+`maritime-sts-monitor` publishes to S3, and the proxy on the server. No code or files are shared with that repo; anything
+needed from it is copied in and owned here, except the hot-spot areas, which are read from the monitor's published list so
+that there is one source of truth.
 
 **This repository is public.** Everything committed to it (files, commit messages, branch and tag names, PR text) is
 readable by anyone, can be cloned, forked, cached and indexed, and stays that way even after a force-push or a deletion.
@@ -36,8 +37,9 @@ source file. Keep concrete numbers, postmortems, "tried X, it backfired because 
 code already says. Applies to new and existing code: if you edit a file that still has comments, move them out as part of
 that edit.
 
-**Never focus on a single hot spot.** The viewer shows four hot spots (`fujairah_outer`, `off_sohar`, `malaysia_eopl`,
-`johor_east_scs`). Tests, checks and progress reports cover all of them; where one has no data, say so explicitly.
+**Never focus on a single hot spot.** The viewer shows every hot spot in the monitor's published list (at the time of writing
+five: `fujairah_outer`, `off_sohar`, `malaysia_eopl`, `johor_east_scs`, `sikka_vadinar`). Tests, checks and progress reports
+cover all of them; where one has no data, say so explicitly.
 
 **Public by design.** The repo and the viewer are both open to everyone, and the viewer is read-only, so nothing in the published files (tiles, JSON, Parquet,
 captures) may expose internal storage, credentials or provenance. The published Parquet holds only the columns the viewer reads (`TABLE_TYPES` in `pipeline/sts_tiles/build.py`); adding a column

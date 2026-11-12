@@ -5,13 +5,13 @@ import Header from "./components/Header";
 import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
-import { fetchActivities, fetchActivityImos, fetchMetadata, fetchTrack } from "./lib/api";
+import { fetchActivities, fetchActivityImos, fetchHotSpots, fetchMetadata, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
-import { entryTitle, pinFirst, sortEntries } from "./lib/entries";
+import { entryTitle, pinFirst, setHotSpotLabels, sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
 import { historyOf, imoOf, trackEntry } from "./lib/groups";
 import { trackLine } from "./lib/track";
-import type { ActivityMatch, Entry, Filter, Meta, Order, Tab, TrackPoint } from "./lib/types";
+import type { ActivityMatch, Entry, Filter, HotSpotCollection, Meta, Order, Tab, TrackPoint } from "./lib/types";
 
 interface SelectionView {
   entry: Entry | null;
@@ -33,6 +33,8 @@ interface TrackData {
   points: TrackPoint[];
 }
 
+const NO_HOT_SPOTS: HotSpotCollection = { type: "FeatureCollection", features: [] };
+
 const NOTHING: Selection = { entry: null, parent: null, activity: null, tab: "pairs", back: null, backLabel: null };
 
 function selectionView(selection: Selection): SelectionView {
@@ -52,6 +54,7 @@ function fallbackMeta(): Meta {
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [filter, setFilter] = useState<Filter | null>(null);
+  const [hotSpots, setHotSpots] = useState<HotSpotCollection | null>(null);
   const [tab, setTab] = useState<Tab>("pairs");
   const [order, setOrder] = useState<Order>("latest");
   const [viewEntries, setViewEntries] = useState<Entry[]>([]);
@@ -81,6 +84,24 @@ export default function App() {
         if (!alive) return;
         setToast("Could not load the data range. Check the connection and reload.");
         setMeta(fallbackMeta());
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetchHotSpots()
+      .then((collection) => {
+        if (!alive) return;
+        setHotSpotLabels(collection);
+        setHotSpots(collection);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setToast("Could not load the hot-spot areas. Check the connection and reload.");
+        setHotSpots(NO_HOT_SPOTS);
       });
     return () => {
       alive = false;
@@ -292,9 +313,10 @@ export default function App() {
         onOpenSanctionedVessel={openSanctionedVessel}
         onBack={goBack}
       />
-      {filter ? (
+      {filter && hotSpots ? (
         <MapView
           ref={mapRef}
+          hotSpots={hotSpots}
           tab={tab}
           track={line}
           history={others}

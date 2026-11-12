@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryIconClass, entryTitle, hotSpotLabel, pinFirst, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import { entryIconClass, entryTitle, hotSpotLabel, pinFirst, setHotSpotLabels, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
 import type { Entry, TileFeature } from "./types";
 
 const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
@@ -15,8 +15,15 @@ describe("entries", () => {
   });
 
   it("names the hot spots and the sources", () => {
-    expect(hotSpotLabel("johor_east_scs")).toBe("Johor East SCS");
-    expect(hotSpotLabel("unknown_place")).toBe("unknown_place");
+    expect(hotSpotLabel("new_area_name")).toBe("New Area Name");
+    expect(hotSpotLabel(null)).toBe("");
+    const area = (name: string, label: string) => ({ type: "Feature" as const, properties: { name, label }, geometry: { type: "Polygon" as const, coordinates: [] } });
+    setHotSpotLabels({ type: "FeatureCollection", features: [area("johor_east_scs", "Johor"), area("sikka_vadinar", "Sikka")] });
+    expect(hotSpotLabel("johor_east_scs")).toBe("Johor");
+    expect(hotSpotLabel("sikka_vadinar")).toBe("Sikka");
+    expect(hotSpotLabel("new_area_name")).toBe("New Area Name");
+    setHotSpotLabels({ type: "FeatureCollection", features: [] });
+    expect(hotSpotLabel("johor_east_scs")).toBe("Johor East Scs");
     expect(sourceName("s1")).toBe("Sentinel-1");
   });
 

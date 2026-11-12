@@ -22,12 +22,14 @@ def s3_client(cfg: Config):
 
 def run(cfg: Config, force: bool, offline: bool) -> dict:
     s3 = None
+    hotspots = "offline"
     if not offline:
         if not cfg.bucket:
             raise SystemExit("STS_BUCKET is not set")
         s3 = s3_client(cfg)
         S.sync_parquets(s3, cfg.bucket, cfg.prefixes, cfg.mirror, cfg.state_file)
-    inputs = F.local_inputs(cfg.mirror, *cfg.prefixes)
+        hotspots = S.refresh_hotspots(s3, cfg.bucket, cfg.hotspots_key, cfg.hotspots_file)
+    inputs = F.local_inputs(cfg.mirror, *cfg.prefixes) | F.hotspots_input(cfg.hotspots_file)
     digest = F.input_hash(inputs)
     live = B.current_manifest(cfg)
     if not force and live and live.get("input_hash") == digest:
@@ -35,7 +37,7 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
         if s3:
             on_disk = {path.relative_to(cfg.mirror).as_posix() for path in (cfg.mirror / "captures").rglob("*.png")}
             _, refreshed = S.sync_captures(s3, cfg.bucket, on_disk, cfg.mirror, cfg.captures_state_file)
-        return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs), "captures_refreshed": refreshed}
+        return {"result": "up_to_date", "build_id": live["build_id"], "inputs": len(inputs), "captures_refreshed": refreshed, "hotspots": hotspots}
     rows, dups = F.dedupe(B.read_rows(cfg.mirror, sorted(k for k in inputs if k.startswith(cfg.findings_prefix))))
     sanctioned, sanctioned_dups = F.dedupe(B.read_rows(cfg.mirror, sorted(k for k in inputs if k.startswith(cfg.sanctioned_prefix))))
     total = len(rows) + len(sanctioned)
@@ -48,10 +50,10 @@ def run(cfg: Config, force: bool, offline: bool) -> dict:
     missing = S.sync_captures(s3, cfg.bucket, wanted, cfg.mirror, cfg.captures_state_file)[0] if s3 else sorted(k for k in wanted if not (cfg.mirror / k).exists())
     if missing:
         log.warning("%d captures referenced but not on S3, e.g. %s", len(missing), missing[0])
-    out = B.build(cfg, inputs, rows, sanctioned, missing)
+    out = B.build(cfg, inputs, rows, sanctioned, missing, F.hot_spots(F.read_hotspots(cfg.hotspots_file)))
     S.prune_captures(cfg.mirror, wanted)
     B.prune_builds(cfg)
-    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "sanctioned": len(sanctioned), "hidden_rejected": total - len(rows) - len(sanctioned), "missing_captures": len(missing)}
+    return {"result": "built", "build_id": out.name, "inputs": len(inputs), "findings": len(rows), "sanctioned": len(sanctioned), "hidden_rejected": total - len(rows) - len(sanctioned), "missing_captures": len(missing), "hotspots": hotspots}
 
 
 def run_once(cfg: Config, force: bool, offline: bool, trigger: str) -> dict:

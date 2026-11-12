@@ -1,14 +1,61 @@
 import hashlib
+import json
 import math
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 def input_hash(inputs: dict[str, str]) -> str:
     text = f"schema={SCHEMA_VERSION}\n" + "\n".join(f"{k}\t{inputs[k]}" for k in sorted(inputs))
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def hotspots_input(path: Path) -> dict[str, str]:
+    try:
+        return {path.name: hashlib.sha256(path.read_bytes()).hexdigest()}
+    except FileNotFoundError:
+        return {}
+
+
+def read_hotspots(path: Path) -> dict | None:
+    try:
+        raw = json.loads(path.read_text())
+    except (FileNotFoundError, ValueError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def valid_box(box) -> bool:
+    if not isinstance(box, (list, tuple)) or len(box) != 4 or not all(number(v) for v in box):
+        return False
+    west, south, east, north = box
+    return -180 <= west < east <= 180 and -90 <= south < north <= 90
+
+
+def hot_spot_label(site: dict) -> str:
+    label = site.get("label")
+    if isinstance(label, str) and label.strip():
+        return label.strip()[:40]
+    return " ".join(word.capitalize() for word in site["name"].split("_") if word)
+
+
+def hot_spots(raw: dict | None) -> dict:
+    sites = (raw or {}).get("sites")
+    entries = sites.get("value") if isinstance(sites, dict) else None
+    features = []
+    for site in entries if isinstance(entries, list) else []:
+        if not isinstance(site, dict) or not isinstance(site.get("name"), str) or not site["name"] or not valid_box(site.get("bbox")):
+            continue
+        west, south, east, north = (float(v) for v in site["bbox"])
+        ring = [[west, south], [east, south], [east, north], [west, north], [west, south]]
+        features.append({"type": "Feature", "properties": {"name": site["name"], "label": hot_spot_label(site)}, "geometry": {"type": "Polygon", "coordinates": [ring]}})
+    return {"type": "FeatureCollection", "features": features}
 
 
 def parquet_files(mirror: Path, *prefixes: str) -> list[Path]:

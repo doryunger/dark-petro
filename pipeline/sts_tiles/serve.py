@@ -329,6 +329,8 @@ def make_handler(store: Store):
                     return self.tile(path, parts.query)
                 if path == "/metadata":
                     return self.metadata()
+                if path == "/hot-spots":
+                    return self.hot_spots()
                 if path == "/activity-imos":
                     return self.activity_imos(parts.query)
                 if path.startswith("/tracks/"):
@@ -386,6 +388,15 @@ def make_handler(store: Store):
                 return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
             filters = parse_filters(query, known_sources(manifest), include_sources=False)
             self.send_json(HTTPStatus.OK, {"imos": store.activity_imos(filters)})
+
+        def hot_spots(self):
+            if not store.manifest():
+                return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
+            try:
+                payload = json.loads((cfg.current / "hot_spots.json").read_text())
+            except (FileNotFoundError, ValueError):
+                payload = {"type": "FeatureCollection", "features": []}
+            self.send_json(HTTPStatus.OK, payload)
 
         def metadata(self):
             meta = store.metadata()
