@@ -56,6 +56,27 @@ The control host (the server that runs the viewer, the listener and the data) is
 lives on it under `~/sts-viewer/data` (`current/` is a symlink to the newest build, `mirror/captures/` holds the captures).
 Reading and copying are fine; anything that restarts or changes something shared needs the user's say-so first.
 
+## Deploying
+
+Deploy only when the user asks, from a clean, committed `main`, and say that the viewer will restart. The standard way is
+`./deploy/deploy.sh` (see "Deploying" in `README.md`): it needs the git-ignored `deploy/deploy.env` and Docker on the machine,
+builds and tests the image there, ships it to the server and restarts the viewer, watcher and listener.
+
+Without local Docker (the usual case on the dev laptop) a frontend-only change goes out as a thin layer; a change under
+`pipeline/` always needs the full `deploy.sh`, because the server's Python must match the repo:
+
+1. `npm run check`, then `npm run build` in `frontend/` (the public Mapbox token and style come from `frontend/.env.local`).
+2. Compare `sha256sum` of `sts_tiles/*.py` inside the running image with the repo's; stop if they differ.
+3. On the server tag the running image as a rollback (`sts-tiles:before-<change>-<date>`), rsync `frontend/dist` to
+   `~/sts-viewer/ui-build/` with a two-line Dockerfile (`FROM` the rollback tag, `COPY dist /app/dist`), and
+   `docker build -t sts-tiles` there. Never build the full image on the server: it has about 2 GB of RAM shared with the
+   monitor app, the job manager, Postgres and the proxy.
+4. `docker compose up -d --no-build --no-deps viewer` in `~/sts-viewer` with `VIEWER_PORT` set to the viewer's published
+   loopback port. Only the viewer restarts, for a few seconds.
+5. Check the live site, not the exit code: the public viewer address is `VIEWER_DOMAIN` in the proxy container's environment;
+   fetch its page (title, bundle name), `/metadata` and a tile. To roll back, tag the rollback image back to `sts-tiles` and
+   repeat step 4.
+
 ## If sensitive material reaches a commit
 
 Remove it from the tree, check whether it is still reachable in history (local and remote), and tell the user plainly. Do
