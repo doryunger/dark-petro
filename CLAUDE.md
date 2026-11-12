@@ -14,8 +14,8 @@ here:
 - **No push, force-push or history rewrite unless the user explicitly says so in the conversation.** Check `git ls-remote
   origin` before committing.
 - **No code comments.** The reasons go in `context/<component>.md`.
-- **Deploying:** only when asked, from committed `main`; `./deploy/deploy.sh` normally, or the thin-layer route in
-  `AGENTS.md` ("Deploying") for frontend-only changes without local Docker. Verify the live site afterwards.
+- **Deploying:** only when asked, from committed `main`: build the image locally and forward it to the server with
+  `./deploy/deploy.sh` (see "Deploying" in `AGENTS.md`). Never build on the server; if local Docker is missing, ask the user.
 - **Server access:** the control host's `host`, `user` and `identity_file` are in the git-ignored
   `deploy/control_host.json` (see "Server access" in `AGENTS.md`). Read it from there, never copy its values elsewhere.
 
