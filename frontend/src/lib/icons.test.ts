@@ -3,7 +3,7 @@ import { PAIR_IMAGES, VESSEL_IMAGES, pairSvg, vesselSvg } from "./icons";
 
 describe("icons", () => {
   it("draws two hulls with the given fill and outline, turned to point south", () => {
-    const svg = pairSvg({ fill: "#f2c230", stroke: "#000000" });
+    const svg = pairSvg({ fill: "#f2c230", stroke: "#000000", scale: 1.3 });
     expect(svg.match(/<path /g)).toHaveLength(2);
     expect(svg).toContain('fill="#f2c230"');
     expect(svg).toContain('stroke="#000000"');
@@ -18,7 +18,7 @@ describe("icons", () => {
   });
 
   it("draws one hull for a single vessel, with the fill and outline given and the bow up", () => {
-    const svg = vesselSvg({ fill: "#d64545", stroke: "#000000" });
+    const svg = vesselSvg({ fill: "#d64545", stroke: "#000000", scale: 1.3 });
     expect(svg.match(/<path /g)).toHaveLength(1);
     expect(svg).toContain('fill="#d64545"');
     expect(svg).toContain('stroke="#000000"');
@@ -27,19 +27,19 @@ describe("icons", () => {
   });
 
   it("has four single-vessel images: red and a lighter red for older detections with a black outline, cyan and grey with a white ring inside a thinner black one", () => {
-    const ring = { stroke: "#ffffff", strokeWidth: 12, outline: "#000000", outlineWidth: 3, scale: 1.4 };
+    const ring = { stroke: "#ffffff", strokeWidth: 6, outline: "#000000", outlineWidth: 2, scale: 1.3 };
     expect(VESSEL_IMAGES).toEqual({
-      "vessel-sanctioned": { fill: "#d64545", stroke: "#000000" },
+      "vessel-sanctioned": { fill: "#d64545", stroke: "#000000", scale: 1.3 },
       "vessel-selected": { fill: "#4fd0e4", ...ring },
       "vessel-picked": { fill: "#9aa5b0", ...ring },
-      "vessel-history": { fill: "#e88f8f", stroke: "#000000" },
+      "vessel-history": { fill: "#e88f8f", stroke: "#000000", scale: 1.3 },
     });
   });
 
   it("has three pair images: yellow and red with a black outline, cyan with a white ring inside a thinner black one, and bigger", () => {
-    expect(PAIR_IMAGES.pair).toEqual({ fill: "#f2c230", stroke: "#000000" });
-    expect(PAIR_IMAGES["pair-sanctioned"]).toEqual({ fill: "#d64545", stroke: "#000000" });
-    expect(PAIR_IMAGES["pair-selected"]).toEqual({ fill: "#4fd0e4", stroke: "#ffffff", strokeWidth: 12, outline: "#000000", outlineWidth: 3, scale: 1.4 });
+    expect(PAIR_IMAGES.pair).toEqual({ fill: "#f2c230", stroke: "#000000", scale: 1.3 });
+    expect(PAIR_IMAGES["pair-sanctioned"]).toEqual({ fill: "#d64545", stroke: "#000000", scale: 1.3 });
+    expect(PAIR_IMAGES["pair-selected"]).toEqual({ fill: "#4fd0e4", stroke: "#ffffff", strokeWidth: 6, outline: "#000000", outlineWidth: 2, scale: 1.3 });
   });
 
   it("draws a ring as a black layer under a white layer under the fill, and widens the view box so the ring is not cut", () => {
@@ -62,6 +62,6 @@ describe("icons", () => {
     expect(ringed).toContain('clip-path="url(#hull-first)"');
     expect(ringed).toContain('clip-path="url(#hull-second)"');
     expect(vesselSvg({ fill: "#4fd0e4", stroke: "#ffffff", strokeWidth: 12, outline: "#000000", outlineWidth: 3 })).not.toContain("clipPath");
-    expect(pairSvg({ fill: "#f2c230", stroke: "#000000" })).not.toContain("clipPath");
+    expect(pairSvg({ fill: "#f2c230", stroke: "#000000", scale: 1.3 })).not.toContain("clipPath");
   });
 });

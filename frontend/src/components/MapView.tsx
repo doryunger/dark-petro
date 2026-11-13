@@ -10,6 +10,7 @@ import { HOT_SPOT_LINE, TRACK_LINE, activityFocusLayer, historyIconImage, histor
 import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
 import { entryCard } from "../lib/popup";
 import { historyPoints } from "../lib/track";
+import Legend from "./Legend";
 import type { Entry, Filter, HotSpotCollection, Order, Tab, TileFeature, TrackLine, TrackPoint } from "../lib/types";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -266,6 +267,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ hotSpots, tab, t
   return (
     <main className="map">
       <div className="map-canvas" ref={container} />
+      <Legend tab={tab} />
       {children}
     </main>
   );

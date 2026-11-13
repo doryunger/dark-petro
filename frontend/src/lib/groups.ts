@@ -1,4 +1,4 @@
-import { HISTORY_PAD_REM, HISTORY_REM, HISTORY_ROW_REM } from "./constants";
+import { HISTORY_PAD_REM, HISTORY_PEEK_REM, HISTORY_ROWS, HISTORY_ROW_REM } from "./constants";
 import { shortId } from "./entries";
 import type { Entry, TrackPoint } from "./types";
 
@@ -31,5 +31,7 @@ export function historyOf(points: TrackPoint[], headId: string): Entry[] {
 }
 
 export function historyHeight(rows: number): number {
-  return Math.min(HISTORY_REM, rows * HISTORY_ROW_REM + HISTORY_PAD_REM);
+  const full = rows * HISTORY_ROW_REM + HISTORY_PAD_REM;
+  if (rows <= HISTORY_ROWS) return full;
+  return HISTORY_ROWS * HISTORY_ROW_REM + HISTORY_PAD_REM + HISTORY_PEEK_REM;
 }

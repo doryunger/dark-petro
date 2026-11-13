@@ -21,19 +21,20 @@ const BASE_WIDTH = 26;
 const VESSEL_BASE_WIDTH = 13;
 const BASE_HEIGHT = 56;
 
-const SELECTED_RING = { stroke: "#ffffff", strokeWidth: 12, outline: "#000000", outlineWidth: 3, scale: 1.4 };
+const REGULAR_SCALE = 1.3;
+const SELECTED_RING = { stroke: "#ffffff", strokeWidth: 6, outline: "#000000", outlineWidth: 2, scale: 1.3 };
 
 export const PAIR_IMAGES: Record<string, PairStyle> = {
-  pair: { fill: "#f2c230", stroke: "#000000" },
-  "pair-sanctioned": { fill: "#d64545", stroke: "#000000" },
+  pair: { fill: "#f2c230", stroke: "#000000", scale: REGULAR_SCALE },
+  "pair-sanctioned": { fill: "#d64545", stroke: "#000000", scale: REGULAR_SCALE },
   "pair-selected": { fill: "#4fd0e4", ...SELECTED_RING },
 };
 
 export const VESSEL_IMAGES: Record<string, PairStyle> = {
-  "vessel-sanctioned": { fill: "#d64545", stroke: "#000000" },
+  "vessel-sanctioned": { fill: "#d64545", stroke: "#000000", scale: REGULAR_SCALE },
   "vessel-selected": { fill: "#4fd0e4", ...SELECTED_RING },
   "vessel-picked": { fill: "#9aa5b0", ...SELECTED_RING },
-  "vessel-history": { fill: "#e88f8f", stroke: "#000000" },
+  "vessel-history": { fill: "#e88f8f", stroke: "#000000", scale: REGULAR_SCALE },
 };
 
 function padOf({ strokeWidth = 3, outline, outlineWidth = 0 }: PairStyle): number {

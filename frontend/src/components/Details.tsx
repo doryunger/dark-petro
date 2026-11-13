@@ -46,7 +46,7 @@ function Capture({ image, alt }: { image: string | null; alt: string }) {
 function DetailsHeading() {
   return (
     <div className="details-heading">
-      <h2 className="details-title">Details</h2>
+      <h2 className="details-title">Capture details</h2>
     </div>
   );
 }

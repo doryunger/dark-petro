@@ -24,8 +24,8 @@ describe("groups", () => {
     expect(historyHeight(1)).toBe(2.25);
     expect(historyHeight(2)).toBe(4);
     expect(historyHeight(3)).toBe(5.75);
-    expect(historyHeight(4)).toBe(5.75);
-    expect(historyHeight(40)).toBe(5.75);
+    expect(historyHeight(4)).toBe(6.375);
+    expect(historyHeight(40)).toBe(6.375);
   });
 
   it("lists the other detections of a vessel, newest first, without the card's own", () => {
