@@ -80,7 +80,7 @@ const Reel = forwardRef<ReelHandle, Props>(function Reel({ tab, onTab, entries, 
   };
 
   return (
-    <section className="reel">
+    <section className="reel" data-tour="reel">
       <Tabs tab={tab} onTab={onTab} />
       <div className="sort">
         <label className="sort-label" htmlFor="sort">

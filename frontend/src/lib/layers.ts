@@ -1,4 +1,5 @@
 import type { ExpressionSpecification, LineLayerSpecification, SymbolLayerSpecification } from "mapbox-gl";
+import { NO_HEADS, type Heads } from "./heads";
 import type { Order, Tab } from "./types";
 
 export const ICON_SIZE: ExpressionSpecification = ["interpolate", ["linear"], ["zoom"], 4, 0.3, 10, 0.5, 14, 0.8, 16, 1];
@@ -63,11 +64,31 @@ export function activityFocusLayer(): SymbolLayerSpecification {
   };
 }
 
-export function symbolLayer(tab: Tab, { order, selectedId, active }: { order: Order; selectedId: string | null | undefined; active: boolean }): SymbolLayerSpecification {
+export function headsFilter(heads: Heads): ExpressionSpecification {
+  return ["in", ["get", "id"], ["literal", heads.ids]];
+}
+
+export const ANCHORS_SOURCE = "anchors";
+
+export function anchorLayer(id: string): SymbolLayerSpecification {
+  return { id, type: "symbol", source: ANCHORS_SOURCE, slot: "top" };
+}
+
+interface SymbolLayerOptions {
+  order: Order;
+  selectedId: string | null | undefined;
+  active: boolean;
+  heads?: Heads;
+  id?: string;
+  source?: string;
+}
+
+export function symbolLayer(tab: Tab, { order, selectedId, active, heads = NO_HEADS, id = tab, source = tab }: SymbolLayerOptions): SymbolLayerSpecification {
   return {
-    id: tab,
+    id,
+    ...(tab === "sanctioned" ? { filter: headsFilter(heads) } : {}),
     type: "symbol",
-    source: tab,
+    source,
     "source-layer": tab,
     slot: "top",
     paint: { "icon-emissive-strength": 1 },

@@ -39,7 +39,7 @@ function vessel(p: TileFeature["properties"], n: 1 | 2): Vessel {
   };
 }
 
-export function toEntry(feature: TileFeature, tab: Tab = "pairs"): Entry {
+export function toEntry(feature: TileFeature, tab: Tab = "pairs", counts?: Record<string, number>): Entry {
   const p = feature.properties;
   const [tileLon, tileLat] = feature.geometry.coordinates;
   const single = tab === "sanctioned";
@@ -55,7 +55,7 @@ export function toEntry(feature: TileFeature, tab: Tab = "pairs"): Entry {
     image: p.image ?? null,
     lon: p.lon ?? tileLon,
     lat: p.lat ?? tileLat,
-    detections: single && typeof p.n === "number" ? p.n : undefined,
+    detections: single ? counts?.[p.id] ?? 1 : undefined,
     vessels: single ? [{ ...vessel(p, 1), sanctioned: true }] : [vessel(p, 1), vessel(p, 2)],
   };
 }
@@ -90,10 +90,10 @@ export function toActivityMatch(record: ActivityRecord): ActivityMatch {
   };
 }
 
-export function uniqueEntries(features: TileFeature[], tab: Tab = "pairs"): Entry[] {
+export function uniqueEntries(features: TileFeature[], tab: Tab = "pairs", counts?: Record<string, number>): Entry[] {
   const seen = new Map<string, Entry>();
   for (const feature of features) {
-    if (!seen.has(feature.properties.id)) seen.set(feature.properties.id, toEntry(feature, tab));
+    if (!seen.has(feature.properties.id)) seen.set(feature.properties.id, toEntry(feature, tab, counts));
   }
   return [...seen.values()];
 }

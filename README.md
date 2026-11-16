@@ -1,71 +1,120 @@
 # Dark Petro
 
-Public map viewer for the ship-to-ship findings published by `maritime-sts-monitor` (its PLAN stage 8). Findings are
-read from the Parquets that project's worker writes to S3; the viewer never writes to them. The monitor app and its
-database are separate and stay behind their own login.
+A public, read-only map of **suspected ship-to-ship (STS) oil transfers** found in free satellite imagery, and of
+**sanctioned vessels** caught on camera at the same places. This repository is the overview of the whole process, from a
+new satellite pass to a dot on the map, and it holds the part the public sees: the data build, the tile service and the web
+app.
 
-Stages: 1) data pipeline (below), 2) tile service (Python, DuckDB 2.0) that serves filtered MVT tiles cut from the Parquet, the
-metadata, the captures and the app, 3) the React app: a reel with two tabs (suspicious activity and sanctioned vessels) and a details panel on the left, the map next to them; the
-list shows what the map is showing. Design notes: [pipeline/context/pipeline.md](pipeline/context/pipeline.md) for the
-pipeline and the service, [frontend/context/frontend.md](frontend/context/frontend.md) for the app.
+## What is Dark Petro
 
-## Data pipeline (`pipeline/`)
+The aim is to track illegal activity that could involve sanctioned vessels. Ship-to-ship (STS) transfer, where two vessels
+stop alongside each other at sea and move cargo across, is a questionable practice that helps countries get around sanctions
+and other economic restrictions. STS is not the problem in itself; it is a hint that something foul may be taking place, and
+we assume that vessels taking part in it are more likely to be sanctioned ones. The app has two tabs.
 
-Runs on every S3 publish (an SQS event reaches `sts-tiles-listener`) and hourly as a safety net (`deploy/sts-tiles.timer`):
+### Suspicious activity
 
-1. List `sts/**.parquet` (pairs) and `sanctioned/**.parquet` (single sanctioned vessels) in the bucket. Download every key whose ETag changed since the last run into `data/mirror/`, drop
-   keys gone from S3 (`data/state.json` holds key to ETag). The worker rewrites these files in place, so a changed ETag is
-   the only delta signal.
-   Also fetch the monitor's published hot-spot list (the names and boxes of the areas) into `data/mirror/hotspots.json`; if that fails the last good copy stays.
-2. If the hash of all mirrored files' contents (the hot-spot list included) and the schema version equals the live build's `input_hash`, stop.
-3. Otherwise read all rows (DuckDB), dedupe on `finding_id`, mirror the PNGs they reference, and write one public-safe
-   `findings.parquet` in a new `data/builds/<stamp>-<hash>/`.
-4. Swap `data/current` to the new build in one rename; keep the last 5 builds.
+![Suspicious activity tab](docs/img/tab-suspicious-activity.png)
 
-Output under the server's `dark-petro/data/`:
+Each entry is STS activity in a hot spot: two vessels lying alongside each other. The reel on the left lists what the map is
+showing, and the panel next to it shows the satellite capture, the time, the hot spot and who the vessels are according to
+AIS (name, flag, IMO), or that a hull had no AIS signal at all.
 
-| Path | What |
-|---|---|
-| `current/findings.parquet` | One row per pair finding, internal columns removed |
-| `current/sanctioned.parquet` | One row per sanctioned-vessel finding, internal columns removed (empty when there are none) |
-| `current/hot_spots.json` | The hot-spot areas (name and box only), served at `/hot-spots` |
-| `current/manifest.json` | Build id, inputs and their SHA-256, counts per hot spot / source / QA status, time range, bounds |
-| `mirror/captures/...` | The capture PNGs, at their S3 keys |
-| `status.json` | Result of the last run (`built`, `up_to_date`, `skipped_empty`, `failed`) |
+### Sanctioned vessels
 
-Files published to the web carry no internal provenance (job, attempt, review folder, code and rules versions).
+![Sanctioned vessels tab](docs/img/tab-sanctioned-vessels.png)
 
-## Viewer (`frontend/`, `pipeline/sts_tiles/serve.py`)
+A watch list: ships already on a sanctions list. We follow them and record every time one is seen in a hot spot, so their
+behaviour can be checked, including whether they turn up in suspicious activity. A vessel appears once on the map with its
+newest sighting; the panel lists every sighting and links to any suspicious activity it took part in.
 
+## Applying geo-intelligence
+
+### Why these hot spots
+
+Findings are limited to a fixed set of **hot spots**: open-water areas where STS transfers are known to happen. We chose them
+from open-source reporting (OSINT), articles about the phenomenon in each area, linked below, and checked them by scanning
+other candidate areas with the same detectors so that the activity is really concentrated in these places. We can only
+detect what Sentinel-1 and Sentinel-2 cover.
+
+| Hot spot | Area | Article |
+|---|---|---|
+| **Fujairah** | Off Fujairah and Khor Fakkan, Gulf of Oman | [Misbar tracks ship-to-ship transfers in Gulf of Oman using satellite imagery](https://www.misbar.com/en/editorial/2026/08/29/misbar-tracks-ship-ship-transfers-gulf-oman-using-satellite-imagery) |
+| **Sohar** | Off Sohar, Gulf of Oman | [Eye in the sky: European satellite catches 19 shadow energy transfers off Oman coast in one day](https://gulfnews.com/business/energy/eye-in-the-sky-european-satellite-catches-19-shadow-energy-transfers-off-oman-coast-in-one-day-1.500698428) |
+| **EOPL** | East of Singapore Strait (EOPL) | [In the waters off Malaysia, Iranian oil sales continue despite blockade](https://aljazeera.com/news/2026/7/30/in-the-waters-off-malaysia-iranian-oil-sales-continue-despite-blockade) |
+| **Johor** | East of Johor, South China Sea | [MMEA special action team conducts forced boarding by helicopter of two errant vessels in eastern Johor waters](https://www.malaymail.com/news/malaysia/2023/10/24/mmea-special-action-team-conducts-forced-boarding-by-helicopter-of-two-errant-vessels-in-eastern-johor-waters/98134) |
+| **Sikka** | Gulf of Kutch, off Sikka and Vadinar | [Tanker congestion shunts vital oil transfers farther from Hormuz](https://gcaptain.com/tanker-congestion-shunts-vital-oil-transfers-farther-from-hormuz/) |
+
+### How we detect STS activity
+
+In a satellite image, STS activity shows as two hulls lying side by side. Every ship in a hot-spot image has to be found, and
+then we tell whether it is one hull or two. The examples below are real passes over Sohar.
+
+**Finding the ship (Ai2).** Open, pre-trained ship detectors from the Allen Institute for AI, one per sensor, mark each ship
+with a box: position, length, width and heading. A box describes one object, so two ships side by side usually get a single
+box (cyan in the images below).
+
+**One hull or two.** This is our own check, and it differs by sensor:
+
+- **Sentinel-2 (optical), spectral.** Each pixel is compared with the colour of the surrounding sea. The pixels that are not
+  sea show the shape of the hulls, and if that shape is wider than one ship and has a second hull beside the first, it is
+  STS activity.
+- **Sentinel-1 (radar), geometry.** A metal hull is a bright return. We outline the bright area and look for two parallel
+  bright lines of ship length; two lines in a tanker-sized outline mean two hulls.
+
+**Sentinel-2**
+
+![Sentinel-2 detection stages](docs/img/detection-s2.png)
+
+1. The detector draws one box, covering only one of the hulls.
+2. The spectral map shows everything that is not sea: one shape, wider than a single ship.
+3. A cross-section of that shape has two shoulders, hull A (the one in the box) and hull B beside it.
+4. Both hulls are outlined and the finding is suspicious activity.
+
+**Sentinel-1**
+
+![Sentinel-1 detection stages](docs/img/detection-s1.png)
+
+1. The detector draws one box over part of the bright return.
+2. The outline of the whole return is much larger than the box.
+3. Two parallel bright lines fit the return: two hulls.
+4. The finding is suspicious activity, with a numbered marker on each hull.
+
+Each hull is then matched to the AIS archive, so it becomes a named vessel or a vessel with no AIS signal. A ship that is on a
+sanctions list is recorded as a sanctioned vessel.
+
+## The architecture
+
+### The pipeline
+
+```mermaid
+flowchart LR
+    A["Watch for new<br/>satellite passes"] --> B["Prepare<br/>the imagery"] --> C["Detect ships<br/>and STS activity"] --> D["Add AIS<br/>and sanctions"] --> E["Review"] --> F["Web app"]
 ```
-cd frontend && npm ci && npm run typecheck && npm test
-cd ../pipeline && python3 -m unittest discover -s tests -t .
+
+1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
+   job.
+2. **Process.** The imagery is prepared, ships are detected and STS activity is found, as described above.
+3. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
+4. **Review.** The findings are saved, and analysts confirm or reject them. Rejected ones never reach the app.
+5. **Show.** The web app rebuilds its public copy whenever findings change.
+
+### On the actual architecture
+
+```mermaid
+flowchart LR
+    CH["<b>Control host</b> (always on)<br/>AIS collection and archive<br/>job manager<br/>review app and web app"]
+    PW["<b>Prep worker</b> (on demand)<br/>prepares the imagery"]
+    GW["<b>GPU worker</b> (on demand)<br/>detects, adds AIS, publishes"]
+    ST[("<b>Storage</b><br/>findings and images")]
+    CH -->|jobs| PW
+    CH -->|jobs| GW
+    PW -->|prepared imagery| ST
+    ST --> GW
+    GW -->|findings| ST
+    ST -->|findings| CH
 ```
 
-One image (`Dockerfile` at the root) holds the pipeline, the tile service and the built app, so it behaves the same on a laptop and on the server. The build runs the frontend tests and the app build in its first stage and the Python tests are run against the image by `deploy.sh`.
+The control host starts the two workers only when there are jobs.
 
-```
-docker compose build
-STS_DATA_DIR=/path/to/data docker compose up viewer
-```
-
-The data directory needs a `current/` build. Put `MAPBOX_ACCESS_TOKEN` (a public `pk.` token) and `VIEWER_PORT` in the environment or a git-ignored `.env`; the viewer is at `http://127.0.0.1:$VIEWER_PORT`. For work on the app itself, run the service and `npm run dev` in `frontend/` (token in `frontend/.env.local`, see `frontend/.env.example`).
-
-## Deploying
-
-```
-cp deploy/deploy.env.example deploy/deploy.env
-./deploy/deploy.sh
-cd pipeline && python3 -m unittest discover -s tests -t .
-```
-
-`deploy/deploy.env` (git-ignored) holds the server, SSH key, queue URL, the viewer's loopback port and the public Mapbox token. `deploy.sh` refuses to run unless the tree is clean on `main` and HEAD is the tip of `origin/main`. It builds the image locally (the app is built inside it) and runs the Python tests in it. On the server, `~/dark-petro` is a git checkout: the script fast-forwards it to that exact commit with `git pull`-style fetch and merge (no files are copied around Git), so `compose.yaml` and the systemd units come from the repo. The image is forwarded with `docker save`, the viewer, watcher and listener are restarted, the hourly systemd timer is installed and the pipeline runs once. The proxy (Caddy) is owned by the `maritime-sts-monitor` repo (`deploy/proxy/`): it forwards the viewer's address to the viewer's loopback port. The server's `.env` holds the
-AWS read keys, region, `STS_BUCKET`, `STS_QUEUE_URL` and `VIEWER_PORT`.
-
-Starting or restarting the services on the server never builds: `docker compose --profile ingest up -d --no-build viewer watch listener` (or `./restart.sh`, which does exactly that and waits for `/metadata`) uses the `sts-tiles` image that `deploy.sh` loaded. The listener is started by Compose only; there is no systemd unit for it. The hourly pipeline run is `deploy/sts-tiles.service` and `deploy/sts-tiles.timer`, which this repo owns and `deploy.sh` installs.
-
-## Checks
-
-Run `./setup-hooks.sh` once in a checkout to install the pre-commit check. It runs `cd frontend && npm run check`, which runs Biome lint, TypeScript typechecking and the frontend tests. The same command runs in the image build and in the GitHub Actions workflow.
-
-Working rules for contributors and agents: [AGENTS.md](AGENTS.md). Design notes and the reasons behind non-obvious choices: [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and [frontend/context/frontend.md](frontend/context/frontend.md).
+More: [docs/development.md](docs/development.md) to run and deploy the viewer, [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and [frontend/context/frontend.md](frontend/context/frontend.md) for design notes, [AGENTS.md](AGENTS.md) for working rules.

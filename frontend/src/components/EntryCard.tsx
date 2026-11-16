@@ -20,6 +20,7 @@ export default function EntryCard({ entry, selected, pinned = false, open = fals
       type="button"
       className={`entry${selected ? " entry-selected" : ""}${pinned ? " entry-pinned" : ""}${open ? " entry-open" : ""}${hasIndicators ? " entry-has-indicators" : ""}`}
       style={{ top }}
+      data-tour={selected ? "card" : undefined}
       title={pinned ? "Outside the current map view. Click to go back to it." : undefined}
       aria-label={`${entryTitle(entry)}${pinned ? ", outside the current map view" : ""}${entry.hasRelatedActivity ? ", has related suspicious activity" : ""}`}
       onClick={() => onSelect(entry)}

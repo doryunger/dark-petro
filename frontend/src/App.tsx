@@ -5,13 +5,15 @@ import Header from "./components/Header";
 import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
 import Toast from "./components/Toast";
-import { fetchActivities, fetchActivityImos, fetchHotSpots, fetchMetadata, fetchTrack } from "./lib/api";
+import Tour from "./components/Tour";
+import { fetchActivities, fetchActivityImos, fetchHotSpots, fetchMetadata, fetchSanctionedIndex, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
 import { entryTitle, pinFirst, setHotSpotLabels, sortEntries } from "./lib/entries";
 import { matches } from "./lib/filters";
+import { NO_HEADS, latestPerVessel } from "./lib/heads";
 import { historyOf, imoOf, trackEntry } from "./lib/groups";
 import { trackLine } from "./lib/track";
-import type { ActivityMatch, Entry, Filter, HotSpotCollection, Meta, Order, Tab, TrackPoint } from "./lib/types";
+import type { ActivityMatch, Entry, Filter, HotSpotCollection, Meta, Order, SanctionedDetection, Tab, TrackPoint } from "./lib/types";
 
 interface SelectionView {
   entry: Entry | null;
@@ -32,6 +34,8 @@ interface TrackData {
   sources: string[];
   points: TrackPoint[];
 }
+
+const TOUR_ENABLED = import.meta.env.DEV || import.meta.env.VITE_TOUR === "1";
 
 const NO_HOT_SPOTS: HotSpotCollection = { type: "FeatureCollection", features: [] };
 
@@ -62,6 +66,7 @@ export default function App() {
   const [track, setTrack] = useState<TrackData | null>(null);
   const [activityData, setActivityData] = useState<{ imo: string; from: string; to: string; matches: ActivityMatch[] } | null>(null);
   const [activityImoData, setActivityImoData] = useState<{ from: string; to: string; imos: string[] } | null>(null);
+  const [sanctionedIndex, setSanctionedIndex] = useState<SanctionedDetection[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
   const mapRef = useRef<MapHandle>(null);
@@ -107,6 +112,18 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSanctionedIndex(controller.signal)
+      .then(setSanctionedIndex)
+      .catch((error) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setToast("Could not load the sanctioned vessels. Check the connection and reload.");
+      });
+    return () => controller.abort();
+  }, []);
+
+  const heads = useMemo(() => (sanctionedIndex && filter ? latestPerVessel(sanctionedIndex, filter) : NO_HEADS), [sanctionedIndex, filter]);
 
   useEffect(() => {
     if (meta) setFilter(defaultFilter(todayUtc(), meta.sources));
@@ -313,6 +330,7 @@ export default function App() {
         onOpenSanctionedVessel={openSanctionedVessel}
         onBack={goBack}
       />
+      {TOUR_ENABLED && filter && hotSpots && <Tour map={mapRef} hotSpots={hotSpots} entries={viewEntries} history={history} points={points} onSelect={(entry) => select(entry, true)} onTab={changeTab} onPick={pick} />}
       {filter && hotSpots ? (
         <MapView
           ref={mapRef}
@@ -324,6 +342,7 @@ export default function App() {
           pickedId={pickedId}
           onPick={pick}
           filter={filter}
+          heads={heads}
           order={order}
           selectedId={cardId}
           onSelect={(entry) => select(entry, true)}

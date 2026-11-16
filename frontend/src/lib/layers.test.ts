@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HOT_SPOT_LINE, ICON_SIZE, TRACK_LINE, historyIconImage, historyLayer, iconImage, sortKey, symbolLayer } from "./layers";
+import { HOT_SPOT_LINE, ICON_SIZE, TRACK_LINE, historyIconImage, historyLayer, headsFilter, iconImage, sortKey, symbolLayer } from "./layers";
 
 const pairsLayer = (selectedId: string | null) => symbolLayer("pairs", { order: "latest", selectedId, active: true });
 
@@ -19,6 +19,15 @@ describe("layers", () => {
     expect([pairs.id, pairs.source, pairs["source-layer"], pairs.layout?.visibility]).toEqual(["pairs", "pairs", "pairs", "none"]);
     expect([vessels.id, vessels.source, vessels["source-layer"], vessels.layout?.visibility]).toEqual(["sanctioned", "sanctioned", "sanctioned", "visible"]);
     expect(vessels.layout?.["icon-image"]).toEqual(iconImage("x", "sanctioned"));
+  });
+
+  it("puts no filter on a pairs layer, because its tiles are exactly the query", () => {
+    expect(pairsLayer(null).filter).toBeUndefined();
+  });
+
+  it("shows on a sanctioned layer only the detections chosen as the newest of their vessel", () => {
+    expect(headsFilter({ ids: ["a", "b"], counts: {} })).toEqual(["in", ["get", "id"], ["literal", ["a", "b"]]]);
+    expect(symbolLayer("sanctioned", { order: "latest", selectedId: null, active: true }).filter).toEqual(["in", ["get", "id"], ["literal", []]]);
   });
 
   it("draws the first entry of the reel on top: a higher key is drawn later, and the selected pair last", () => {

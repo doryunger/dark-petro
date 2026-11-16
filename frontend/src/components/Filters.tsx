@@ -40,7 +40,7 @@ export default function Filters({ meta, applied, onApply }: Props) {
   };
 
   return (
-    <section className="filters">
+    <section className="filters" data-tour="filters">
       <div className="field">
         <h2 className="field-title">Time range</h2>
         <RangeSlider min={meta.min_date} max={meta.max_date} value={range} onChange={setRange} />

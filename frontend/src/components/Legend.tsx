@@ -10,11 +10,13 @@ interface Item {
 
 export const LEGEND_ITEMS: Record<Tab, Item[]> = {
   pairs: [
-    { label: "STS vessels", style: PAIR_IMAGES.pair, draw: pairSvg },
-    { label: "Sanctioned vessel in STS", style: PAIR_IMAGES["pair-sanctioned"], draw: pairSvg },
+    { label: "Suspected STS", style: PAIR_IMAGES.pair, draw: pairSvg },
+    { label: "Suspected STS with sanctioned vessel", style: PAIR_IMAGES["pair-sanctioned"], draw: pairSvg },
+    { label: "Selected", style: PAIR_IMAGES["pair-selected"], draw: pairSvg },
   ],
   sanctioned: [
     { label: "Sanctioned vessel", style: VESSEL_IMAGES["vessel-sanctioned"], draw: vesselSvg },
+    { label: "Selected vessel", style: VESSEL_IMAGES["vessel-selected"], draw: vesselSvg },
     { label: "Previous position", style: VESSEL_IMAGES["vessel-history"], draw: vesselSvg },
     { label: "Selected previous position", style: VESSEL_IMAGES["vessel-picked"], draw: vesselSvg },
   ],

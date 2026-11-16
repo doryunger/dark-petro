@@ -210,20 +210,23 @@ class Serving(unittest.TestCase):
         self.assertIn("t", one)
         self.assertNotIn("v2_name", one)
         self.assertEqual(one["yaw"], 45.0)
-        _, _, newest = self.get("/tiles/sanctioned/0/0/0.mvt")
-        self.assertNotIn("yaw", mvt.decode(newest)[0])
+        _, _, every = self.get("/tiles/sanctioned/0/0/0.mvt")
+        newest = {f["id"]: f for f in mvt.decode(every)}["s1_20261021T060000_w0-2"]
+        self.assertNotIn("yaw", newest)
 
-    def test_a_vessel_seen_twice_is_one_icon_on_the_map_its_newest_detection_under_the_filters(self):
+    def test_a_vessel_seen_twice_has_every_detection_in_the_tile_without_a_count(self):
         _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt")
-        self.assertEqual([f["id"] for f in mvt.decode(body)], ["s1_20261021T060000_w0-2"])
-        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt?to=2026-10-20")
-        self.assertEqual([f["id"] for f in mvt.decode(body)], ["s1_20261012T060000_w0-1"])
+        features = mvt.decode(body)
+        self.assertEqual(sorted(f["id"] for f in features), ["s1_20261012T060000_w0-1", "s1_20261021T060000_w0-2"])
+        self.assertTrue(all("n" not in f for f in features))
 
-    def test_a_sanctioned_tile_counts_the_vessel_detections_under_the_filters(self):
-        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt")
-        self.assertEqual({f["id"]: f["n"] for f in mvt.decode(body)}, {"s1_20261021T060000_w0-2": 2})
-        _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt?from=2026-10-20&to=2026-10-22")
-        self.assertEqual({f["id"]: f["n"] for f in mvt.decode(body)}, {"s1_20261021T060000_w0-2": 1})
+    def test_the_sanctioned_index_lists_every_detection_oldest_first(self):
+        status, headers, body = self.get("/sanctioned-index")
+        self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+        self.assertEqual(json.loads(body), {"detections": [
+            ["s1_20261012T060000_w0-1", "9257149", 1791784800, "s1"],
+            ["s1_20261021T060000_w0-2", "9257149", 1792562400, "s1"],
+        ]})
 
     def test_pairs_and_sanctioned_vessels_stay_apart(self):
         _, _, pairs = self.get("/tiles/0/0/0.mvt")
@@ -298,19 +301,18 @@ class Serving(unittest.TestCase):
 
 @unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")
 class SanctionedCounts(unittest.TestCase):
-    def test_the_count_covers_detections_outside_the_tile_and_respects_the_dates(self):
+    def test_a_tile_holds_every_detection_in_its_bounds_and_the_index_holds_them_all(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             far = sanctioned_finding(2, "s2", 11, lat=-30.0, lon=-60.0)
             make_data(root, [finding(1, "s1", 10)], [sanctioned_finding(1, "s1", 12, lat=25.0, lon=56.5), far, sanctioned_finding(3, "s1", 14, lat=25.1, lon=56.6, vessel_imo="1111111")])
             store = V.Store(make_config(root))
             everything = {"from": None, "to": None, "sources": None}
-            near = {f["id"]: f["n"] for f in mvt.decode(store.tile("sanctioned", 3, 5, 3, everything))}
-            self.assertEqual(near, {"s1_20261012T060000_w0-1": 2, "s1_20261014T060000_w0-3": 1})
-            late = dict(everything, **{"from": date(2026, 10, 12)})
-            self.assertEqual({f["n"] for f in mvt.decode(store.tile("sanctioned", 3, 5, 3, late))}, {1})
-            only_far = {f["id"] for f in mvt.decode(store.tile("sanctioned", 3, 2, 4, dict(everything, to=date(2026, 10, 11))))}
+            near = {f["id"] for f in mvt.decode(store.tile("sanctioned", 3, 5, 3, everything))}
+            self.assertEqual(near, {"s1_20261012T060000_w0-1", "s1_20261014T060000_w0-3"})
+            only_far = {f["id"] for f in mvt.decode(store.tile("sanctioned", 3, 2, 4, everything))}
             self.assertEqual(only_far, {"s2_20261011T060000_w0-2"})
+            self.assertEqual([row[0] for row in store.sanctioned_index()], ["s2_20261011T060000_w0-2", "s1_20261012T060000_w0-1", "s1_20261014T060000_w0-3"])
 
 
 @unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")

@@ -23,7 +23,7 @@ FINDING_ID_TEXT = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
 ALLOWED_PARAMS = {"from", "to", "source"}
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 TILE_MARGIN = 0.1
-TILE_REVISION = 3
+TILE_REVISION = 4
 
 TILE_SQL = """
 SELECT ST_AsMVT({%PROPS%}, '%LAYER%')
@@ -35,11 +35,11 @@ FROM (
       strftime(capture_utc, '%Y-%m-%d') AS day,
       epoch(capture_utc)::BIGINT AS t%DERIVED%
     FROM (
-      SELECT *%WINDOW%
+      SELECT *
       FROM read_parquet(?)
       WHERE true{extra}
     )
-    WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?%HEAD%
+    WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
   )
 )
 WHERE geom IS NOT NULL
@@ -60,19 +60,21 @@ PAIR_DERIVED = """,
 SANCTIONED_PROPS = """
   'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
   'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
-  'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo, 'n': n
+  'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo
 """
 
-SANCTIONED_WINDOW = """,
-      CASE WHEN vessel_imo IS NULL THEN 1 ELSE count(*) OVER (PARTITION BY vessel_imo) END AS n,
-      CASE WHEN vessel_imo IS NULL THEN 1 ELSE row_number() OVER (PARTITION BY vessel_imo ORDER BY capture_utc DESC, finding_id) END AS head_rank"""
-
 LAYERS = {
-    "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED).replace("%WINDOW%", "").replace("%HEAD%", "")},
-    "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "").replace("%WINDOW%", SANCTIONED_WINDOW).replace("%HEAD%", " AND head_rank = 1")},
-    "activity": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "activity").replace("%DERIVED%", PAIR_DERIVED).replace("%WINDOW%", "").replace("%HEAD%", "")},
+    "pairs": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "pairs").replace("%DERIVED%", PAIR_DERIVED)},
+    "sanctioned": {"file": "sanctioned.parquet", "sql": TILE_SQL.replace("%PROPS%", SANCTIONED_PROPS).replace("%LAYER%", "sanctioned").replace("%DERIVED%", "")},
+    "activity": {"file": "findings.parquet", "sql": TILE_SQL.replace("%PROPS%", PAIR_PROPS).replace("%LAYER%", "activity").replace("%DERIVED%", PAIR_DERIVED)},
 }
 
+
+SANCTIONED_INDEX_SQL = """
+SELECT finding_id, vessel_imo, epoch(capture_utc)::BIGINT, source
+FROM read_parquet(?)
+ORDER BY capture_utc, finding_id
+"""
 
 TRACK_SQL = """
 SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png, yaw,
@@ -229,6 +231,17 @@ class Store:
             return None
         return {"min_date": span[0], "max_date": span[1], "sources": known_sources(m)}
 
+    def sanctioned_index(self) -> list[list]:
+        source = self.cfg.current / "sanctioned.parquet"
+        if not source.exists():
+            return []
+        cur = self.con.cursor()
+        try:
+            rows = cur.execute(SANCTIONED_INDEX_SQL, [str(source)]).fetchall()
+        finally:
+            cur.close()
+        return [list(row) for row in rows]
+
     def track(self, imo: str, filters: dict) -> list[dict]:
         source = self.cfg.current / "sanctioned.parquet"
         if not source.exists():
@@ -331,6 +344,8 @@ def make_handler(store: Store):
                     return self.metadata()
                 if path == "/hot-spots":
                     return self.hot_spots()
+                if path == "/sanctioned-index":
+                    return self.sanctioned_index()
                 if path == "/activity-imos":
                     return self.activity_imos(parts.query)
                 if path.startswith("/tracks/"):
@@ -381,6 +396,12 @@ def make_handler(store: Store):
                 raise BadRequest("not an activity path")
             filters = parse_filters(query, known_sources(manifest), include_sources=False)
             self.send_json(HTTPStatus.OK, {"imo": m.group(1), "activities": store.activities(m.group(1), filters)})
+
+        def sanctioned_index(self):
+            manifest = store.manifest()
+            if not manifest:
+                return self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "no data yet"})
+            self.send_json(HTTPStatus.OK, {"detections": store.sanctioned_index()})
 
         def activity_imos(self, query: str):
             manifest = store.manifest()

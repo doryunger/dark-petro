@@ -25,7 +25,7 @@ export default function History({ items, pickedId, top, height, onPick }: Props)
   }, [pickedId, itemSignature]);
 
   return (
-    <div className="history" style={{ top, height: `${height}rem` }} ref={box}>
+    <div className="history" data-tour="history" style={{ top, height: `${height}rem` }} ref={box}>
       {items.map((entry) => (
         <button
           type="button"

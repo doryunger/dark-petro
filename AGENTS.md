@@ -86,7 +86,7 @@ Reading and copying are fine; anything that restarts or changes something shared
 ## Deploying
 
 Deploy only when the user asks, from a clean, committed `main`, and say that the viewer will restart. The way we deploy is to
-build the image on the dev machine and forward it to the server: `./deploy/deploy.sh` (see "Deploying" in `README.md`) builds
+build the image on the dev machine and forward it to the server: `./deploy/deploy.sh` (see "Deploying" in `docs/development.md`) builds
 the image locally (the frontend check runs inside the build), runs the Python tests in it, ships it with `docker save`, and
 restarts the viewer, watcher and listener. It needs the git-ignored `deploy/deploy.env` and Docker on the dev machine.
 

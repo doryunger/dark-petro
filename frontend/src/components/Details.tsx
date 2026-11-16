@@ -64,7 +64,7 @@ interface Props {
 export default function Details({ entry, onClose, activityMatches, headerBackLabel, onOpenActivity, onOpenSanctionedVessel, onBack }: Props) {
   if (!entry) {
     return (
-      <section className="details">
+      <section className="details" data-tour="details">
         <DetailsHeading />
         <p className="details-placeholder">Select a finding from the list or the map to see its capture and details here.</p>
       </section>
@@ -73,7 +73,7 @@ export default function Details({ entry, onClose, activityMatches, headerBackLab
   const headerTail = entry.tab === "pairs" ? entry.shortId : entryTitle(entry);
   const primaryVessel = entry.vessels[0];
   return (
-    <section className="details">
+    <section className="details" data-tour="details">
       <DetailsHeading />
       <header className="details-entry">
         <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />

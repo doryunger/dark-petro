@@ -1,6 +1,6 @@
 import { toActivityMatch } from "./entries";
 import { activityImosUrl, activityUrl, trackUrl } from "./filters";
-import type { ActivityMatch, ActivityRecord, Filter, HotSpotCollection, Meta, TrackPoint } from "./types";
+import type { ActivityMatch, ActivityRecord, Filter, HotSpotCollection, Meta, SanctionedDetection, TrackPoint } from "./types";
 
 export async function fetchMetadata(): Promise<Meta> {
   const response = await fetch("/metadata");
@@ -34,4 +34,11 @@ export async function fetchActivityImos(filter: Pick<Filter, "from" | "to">, sig
   if (!response.ok) throw new Error(`activity imos ${response.status}`);
   const payload = (await response.json()) as { imos: string[] };
   return payload.imos;
+}
+
+export async function fetchSanctionedIndex(signal?: AbortSignal): Promise<SanctionedDetection[]> {
+  const response = await fetch("/sanctioned-index", { signal });
+  if (!response.ok) throw new Error(`sanctioned index ${response.status}`);
+  const payload = (await response.json()) as { detections: [string, string | null, number, string][] };
+  return payload.detections.map(([id, imo, t, source]) => ({ id, imo, t, source }));
 }

@@ -38,6 +38,13 @@ export interface Entry {
   hasRelatedActivity?: boolean;
 }
 
+export interface SanctionedDetection {
+  id: string;
+  imo: string | null;
+  t: number;
+  source: string;
+}
+
 export interface TrackPoint {
   id: string;
   date: string;

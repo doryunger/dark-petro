@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { matches, tileUrl } from "./filters";
+import { activityTileUrl, matches, tileUrl } from "./filters";
 
 const filter = { from: "2026-10-17", to: "2026-10-24", sources: ["s2", "s1"] };
 
 describe("filters", () => {
-  it("puts the filters in the tile url in a fixed order, keeping the tile placeholders", () => {
-    expect(tileUrl("https://x.test", filter)).toBe("https://x.test/tiles/{z}/{x}/{y}.mvt?from=2026-10-17&to=2026-10-24&source=s1,s2");
-  });
-
-  it("asks for the sanctioned vessels from their own tile path", () => {
-    expect(tileUrl("https://x.test", filter, "sanctioned")).toBe("https://x.test/tiles/sanctioned/{z}/{x}/{y}.mvt?from=2026-10-17&to=2026-10-24&source=s1,s2");
-    expect(tileUrl("https://x.test", filter, "pairs")).toBe(tileUrl("https://x.test", filter));
+  it("puts the whole query, in a fixed order, in the tile url and nothing else", () => {
+    expect(tileUrl("https://x.test", "pairs", filter)).toBe("https://x.test/tiles/{z}/{x}/{y}.mvt?from=2026-10-17&to=2026-10-24&source=s1,s2");
+    expect(tileUrl("https://x.test", "sanctioned", filter)).toBe("https://x.test/tiles/sanctioned/{z}/{x}/{y}.mvt?from=2026-10-17&to=2026-10-24&source=s1,s2");
+    expect(activityTileUrl("https://x.test", "a b")).toBe("https://x.test/tiles/activity/{z}/{x}/{y}.mvt?id=a%20b");
   });
 
   it("matches on date, both ends included, and on source", () => {
