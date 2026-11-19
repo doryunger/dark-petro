@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { createEffect, createSignal, onSettled, untrack } from "solid-js";
 
 export interface Gap {
   index: number;
@@ -28,19 +28,17 @@ export function revealScrollTop(index: number, count: number, rowHeight: number,
   return Math.min(Math.max(0, rowOffset(Math.max(0, index), rowHeight, gap)), max);
 }
 
-export function useVirtualRows(ref: RefObject<HTMLElement | null>, count: number, rowHeight: number, gap?: Gap) {
-  const [range, setRange] = useState({ start: 0, end: 20 });
-  const gapIndex = gap?.index;
-  const gapHeight = gap?.height;
-  const update = useCallback(() => {
-    const el = ref.current;
+export function createVirtualRows(scroller: () => HTMLElement | undefined, count: () => number, rowHeight: () => number, gap: () => Gap | undefined) {
+  const [range, setRange] = createSignal({ start: 0, end: 20 });
+  const update = () => {
+    const el = scroller();
     if (!el) return;
-    const spacer = gapIndex === undefined || gapHeight === undefined ? undefined : { index: gapIndex, height: gapHeight };
-    const next = visibleRange(el.scrollTop, el.clientHeight, count, rowHeight, 4, spacer);
+    const next = visibleRange(el.scrollTop, el.clientHeight, count(), rowHeight(), 4, gap());
     setRange((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
-  }, [ref, count, rowHeight, gapIndex, gapHeight]);
-  useEffect(() => {
-    const el = ref.current;
+  };
+  createEffect(() => [count(), rowHeight(), gap()?.index, gap()?.height] as const, () => untrack(update));
+  onSettled(() => {
+    const el = scroller();
     if (!el) return undefined;
     update();
     el.addEventListener("scroll", update, { passive: true });
@@ -50,6 +48,6 @@ export function useVirtualRows(ref: RefObject<HTMLElement | null>, count: number
       el.removeEventListener("scroll", update);
       observer.disconnect();
     };
-  }, [ref, update]);
+  });
   return range;
 }

@@ -1,52 +1,81 @@
-import { useState } from "react";
+import { createSignal, For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { formatDate, formatTime } from "../lib/dates";
 import { entryTitle, hotSpotLabel, sourceName } from "../lib/entries";
-import type { ReactNode } from "react";
 import type { ActivityMatch, Entry, Vessel as VesselData } from "../lib/types";
 
-function RegistrationValue({ vessel }: { vessel: VesselData }) {
-  return <>{vessel.imo}{vessel.imo && vessel.flag ? " " : ""}{vessel.flag && <span className="registration-flag">({vessel.flag})</span>}</>;
+function RegistrationValue(props: { vessel: VesselData }) {
+  return (
+    <>
+      {props.vessel.imo}
+      {props.vessel.imo && props.vessel.flag ? " " : ""}
+      {props.vessel.flag && <span class="registration-flag">({props.vessel.flag})</span>}
+    </>
+  );
 }
 
-function Vessel({ number, vessel, onOpenVessel }: { number: number; vessel: VesselData; onOpenVessel: (imo: string) => void }) {
+function Vessel(props: { number: number; vessel: VesselData; onOpenVessel: (imo: string) => void }) {
   return (
-    <div className="detail-row detail-row-vessel">
-      <span className="detail-label">
-        <span className={`vessel-marker ${vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"}`}>{number}</span>
+    <div class="detail-row detail-row-vessel">
+      <span class="detail-label">
+        <span class={["vessel-marker", props.vessel.known ? "vessel-marker-known" : "vessel-marker-unknown"]}>{props.number}</span>
       </span>
-      <span className="detail-value">
-        {vessel.sanctioned && vessel.imo ? <button className="details-vessel-link" type="button" onClick={() => { if (vessel.imo) onOpenVessel(vessel.imo); }}>{vessel.known ? vessel.name : "N/A"}</button> : vessel.known ? vessel.name : <span className="detail-flag">N/A</span>}
-        {vessel.sanctioned && <span className="detail-badge">Sanctioned</span>}
-        {vessel.imo && <span className="detail-registration-inline"><span className="detail-label">Registration:</span> <RegistrationValue vessel={vessel} /></span>}
-        {!vessel.imo && vessel.flag && <span className="detail-registration-inline"><span className="detail-label">Flag:</span> <span className="registration-flag">{vessel.flag}</span></span>}
+      <span class="detail-value">
+        {props.vessel.sanctioned && props.vessel.imo ? (
+          <button
+            class="details-vessel-link"
+            type="button"
+            onClick={() => {
+              if (props.vessel.imo) props.onOpenVessel(props.vessel.imo);
+            }}
+          >
+            {props.vessel.known ? props.vessel.name : "N/A"}
+          </button>
+        ) : props.vessel.known ? (
+          props.vessel.name
+        ) : (
+          <span class="detail-flag">N/A</span>
+        )}
+        {props.vessel.sanctioned && <span class="detail-badge">Sanctioned</span>}
+        {props.vessel.imo && (
+          <span class="detail-registration-inline">
+            <span class="detail-label">Registration:</span> <RegistrationValue vessel={props.vessel} />
+          </span>
+        )}
+        {!props.vessel.imo && props.vessel.flag && (
+          <span class="detail-registration-inline">
+            <span class="detail-label">Flag:</span> <span class="registration-flag">{props.vessel.flag}</span>
+          </span>
+        )}
       </span>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
+function Row(props: { label: string; value: JSX.Element }) {
   return (
-    <div className="detail-row">
-      <span className="detail-label">{label}</span>
-      <span className="detail-value">{value}</span>
+    <div class="detail-row">
+      <span class="detail-label">{props.label}</span>
+      <span class="detail-value">{props.value}</span>
     </div>
   );
 }
 
-function Capture({ image, alt }: { image: string | null; alt: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!image || failed) return <div className="details-image">Image not available</div>;
+function Capture(props: { image: string | null; alt: string }) {
+  const [failed, setFailed] = createSignal(false);
   return (
-    <div className="details-image">
-      <img src={`/${image}`} alt={alt} onError={() => setFailed(true)} />
+    <div class="details-image">
+      <Show when={props.image && !failed()} fallback="Image not available">
+        <img src={`/${props.image}`} alt={props.alt} onError={() => setFailed(true)} />
+      </Show>
     </div>
   );
 }
 
 function DetailsHeading() {
   return (
-    <div className="details-heading">
-      <h2 className="details-title">Capture details</h2>
+    <div class="details-heading">
+      <h2 class="details-title">Capture details</h2>
     </div>
   );
 }
@@ -61,63 +90,74 @@ interface Props {
   onBack: () => void;
 }
 
-export default function Details({ entry, onClose, activityMatches, headerBackLabel, onOpenActivity, onOpenSanctionedVessel, onBack }: Props) {
-  if (!entry) {
-    return (
-      <section className="details" data-tour="details">
-        <DetailsHeading />
-        <p className="details-placeholder">Select a finding from the list or the map to see its capture and details here.</p>
-      </section>
-    );
-  }
-  const headerTail = entry.tab === "pairs" ? entry.shortId : entryTitle(entry);
-  const primaryVessel = entry.vessels[0];
+export default function Details(props: Props) {
   return (
-    <section className="details" data-tour="details">
+    <section class="details" data-tour="details">
       <DetailsHeading />
-      <header className="details-entry">
-        <span className={`details-icon${entry.tab === "sanctioned" ? " details-icon-vessel" : ""}${entry.sanctioned ? "" : " details-icon-clear"}`} />
-        <h3 className="details-id">
-          {headerBackLabel ? <><button className="details-vessel-link" type="button" onClick={onBack}>{headerBackLabel}</button>/{headerTail}</> : entryTitle(entry)}
-        </h3>
-        <button className="details-close" type="button" aria-label="Close" onClick={onClose}>
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-            <path className="close-outline" d="M3 3L13 13M13 3L3 13" />
-            <path className="close-cross" d="M3 3L13 13M13 3L3 13" />
-          </svg>
-        </button>
-      </header>
-      <div className="details-content">
-        <Capture key={entry.id} image={entry.image} alt={entry.tab === "sanctioned" ? "Capture of the vessel" : "Capture of the pair"} />
-        <div className="details-source">Source: {sourceName(entry.source)}</div>
-        <div className="details-body">
-          {entry.tab === "sanctioned" ? (
-            <>
-              <Row label="ID" value={entry.shortId} />
-              {primaryVessel?.imo ? <Row label="Registration" value={<RegistrationValue vessel={primaryVessel} />} /> : primaryVessel?.flag && <Row label="Flag" value={<span className="registration-flag">{primaryVessel.flag}</span>} />}
-            </>
-          ) : (
-            entry.vessels.map((vessel, index) => {
-              const number = index + 1;
-              return <Vessel key={`participant-${number}`} number={number} vessel={vessel} onOpenVessel={onOpenSanctionedVessel} />;
-            })
-          )}
-          <Row label="Capture time" value={`${formatDate(entry.date)} ${formatTime(entry.t)}`} />
-          <Row label="Position" value={`${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}`} />
-          {entry.tab === "sanctioned" && activityMatches.length > 0 && <section className="details-activities" aria-label="Related suspicious activities">
-            <h3 className="details-activities-title">Related suspicious activities</h3>
-            <div className="details-activities-list">
-              {activityMatches.map((match) => {
-                return <button className="details-activity" key={match.entry.id} type="button" onClick={() => onOpenActivity(match)}>
-                  <span className="details-activity-icon" aria-hidden="true" />
-                  <span className="details-activity-id">ID {match.entry.shortId}</span>
-                  <span className="details-activity-meta">{hotSpotLabel(match.entry.hotSpot)} · {formatDate(match.entry.date)} {formatTime(match.entry.t)}</span>
-                </button>;
-              })}
+      <Show when={props.entry} keyed fallback={<p class="details-placeholder">Select a finding from the list or the map to see its capture and details here.</p>}>
+        {(entry) => (
+          <>
+            <header class="details-entry">
+              <span class={["details-icon", { "details-icon-vessel": entry.tab === "sanctioned", "details-icon-clear": !entry.sanctioned }]} />
+              <h3 class="details-id">
+                <Show when={props.headerBackLabel} fallback={entryTitle(entry)}>
+                  <button class="details-vessel-link" type="button" onClick={props.onBack}>
+                    {props.headerBackLabel}
+                  </button>
+                  /{entry.tab === "pairs" ? entry.shortId : entryTitle(entry)}
+                </Show>
+              </h3>
+              <button class="details-close" type="button" aria-label="Close" onClick={props.onClose}>
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                  <path class="close-outline" d="M3 3L13 13M13 3L3 13" />
+                  <path class="close-cross" d="M3 3L13 13M13 3L3 13" />
+                </svg>
+              </button>
+            </header>
+            <div class="details-content">
+              <Capture image={entry.image} alt={entry.tab === "sanctioned" ? "Capture of the vessel" : "Capture of the pair"} />
+              <div class="details-source">Source: {sourceName(entry.source)}</div>
+              <div class="details-body">
+                <Show
+                  when={entry.tab === "sanctioned"}
+                  fallback={
+                    <For each={entry.vessels}>
+                      {(vessel, index) => <Vessel number={index() + 1} vessel={vessel} onOpenVessel={props.onOpenSanctionedVessel} />}
+                    </For>
+                  }
+                >
+                  <Row label="ID" value={entry.shortId} />
+                  {entry.vessels[0]?.imo ? (
+                    <Row label="Registration" value={<RegistrationValue vessel={entry.vessels[0]} />} />
+                  ) : (
+                    entry.vessels[0]?.flag && <Row label="Flag" value={<span class="registration-flag">{entry.vessels[0].flag}</span>} />
+                  )}
+                </Show>
+                <Row label="Capture time" value={`${formatDate(entry.date)} ${formatTime(entry.t)}`} />
+                <Row label="Position" value={`${entry.lat.toFixed(4)}, ${entry.lon.toFixed(4)}`} />
+                <Show when={entry.tab === "sanctioned" && props.activityMatches.length > 0}>
+                  <section class="details-activities" aria-label="Related suspicious activities">
+                    <h3 class="details-activities-title">Related suspicious activities</h3>
+                    <div class="details-activities-list">
+                      <For each={props.activityMatches} keyed={(match) => match.entry.id}>
+                        {(match) => (
+                          <button class="details-activity" type="button" onClick={() => props.onOpenActivity(match())}>
+                            <span class="details-activity-icon" aria-hidden="true" />
+                            <span class="details-activity-id">ID {match().entry.shortId}</span>
+                            <span class="details-activity-meta">
+                              {hotSpotLabel(match().entry.hotSpot)} · {formatDate(match().entry.date)} {formatTime(match().entry.t)}
+                            </span>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </section>
+                </Show>
+              </div>
             </div>
-          </section>}
-        </div>
-      </div>
+          </>
+        )}
+      </Show>
     </section>
   );
 }

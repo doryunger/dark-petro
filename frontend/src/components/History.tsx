@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { createEffect, For } from "solid-js";
 import { formatDate } from "../lib/dates";
 import { hotSpotLabel } from "../lib/entries";
 import type { Entry } from "../lib/types";
@@ -11,35 +11,32 @@ interface Props {
   onPick: (entry: Entry) => void;
 }
 
-export default function History({ items, pickedId, top, height, onPick }: Props) {
-  const box = useRef<HTMLDivElement>(null);
-  const itemSignature = items.map((entry) => entry.id).join("\u0000");
+export default function History(props: Props) {
+  let box: HTMLDivElement | undefined;
 
-  useEffect(() => {
-    const el = box.current;
-    if (!itemSignature) return;
-    const row = pickedId ? el?.querySelector<HTMLElement>(`[data-id="${CSS.escape(pickedId)}"]`) : null;
-    if (!el || !row) return;
-    if (row.offsetTop < el.scrollTop) el.scrollTop = row.offsetTop;
-    else if (row.offsetTop + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = row.offsetTop + row.offsetHeight - el.clientHeight;
-  }, [pickedId, itemSignature]);
+  createEffect(
+    () => [props.pickedId, props.items.map((entry) => entry.id).join("\u0000")] as const,
+    ([pickedId, itemSignature]) => {
+      if (!itemSignature) return;
+      const row = pickedId ? box?.querySelector<HTMLElement>(`[data-id="${CSS.escape(pickedId)}"]`) : null;
+      if (!box || !row) return;
+      if (row.offsetTop < box.scrollTop) box.scrollTop = row.offsetTop;
+      else if (row.offsetTop + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = row.offsetTop + row.offsetHeight - box.clientHeight;
+    },
+  );
 
   return (
-    <div className="history" data-tour="history" style={{ top, height: `${height}rem` }} ref={box}>
-      {items.map((entry) => (
-        <button
-          type="button"
-          key={entry.id}
-          data-id={entry.id}
-          className={`history-item${entry.id === pickedId ? " history-item-selected" : ""}`}
-          onClick={() => onPick(entry)}
-        >
-          <span className="history-icon" />
-          <span className="history-area">{hotSpotLabel(entry.hotSpot)}</span>
-          <span className="history-date">{formatDate(entry.date)}</span>
-          <span className="history-source">{entry.source.toUpperCase()}</span>
-        </button>
-      ))}
+    <div class="history" data-tour="history" style={{ top: props.top, height: `${props.height}rem` }} ref={(el) => (box = el)}>
+      <For each={props.items} keyed={(entry) => entry.id}>
+        {(entry) => (
+          <button type="button" data-id={entry().id} class={["history-item", { "history-item-selected": entry().id === props.pickedId }]} onClick={() => props.onPick(entry())}>
+            <span class="history-icon" />
+            <span class="history-area">{hotSpotLabel(entry().hotSpot)}</span>
+            <span class="history-date">{formatDate(entry().date)}</span>
+            <span class="history-source">{entry().source.toUpperCase()}</span>
+          </button>
+        )}
+      </For>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { AttributionControl, Map as MapboxMap, Marker, NavigationControl, Popup, ScaleControl, type GeoJSONSource } from "mapbox-gl";
-import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
+import { createEffect, createSignal, onSettled, untrack } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { FLY_ZOOM, MAX_TILE_ZOOM, START_MAX_ZOOM, TABS } from "../lib/constants";
 import { toEntry, uniqueEntries } from "../lib/entries";
 import { activityTileUrl } from "../lib/filters";
@@ -30,6 +31,7 @@ export interface MapHandle {
 }
 
 interface Props {
+  ref?: (handle: MapHandle) => void;
   hotSpots: HotSpotCollection;
   tab: Tab;
   track: TrackLine;
@@ -45,71 +47,70 @@ interface Props {
   onEntries: (entries: Entry[]) => void;
   onError: (message: string) => void;
   onSettled: () => void;
-  children?: ReactNode;
+  children?: JSX.Element;
 }
 
 function queryStyle(state: { tab: Tab; filter: Filter; heads: Heads; order: Order; selectedId: string | null }, id: Tab): QueryStyle {
   return { order: state.order, selectedId: id === state.tab ? state.selectedId : null, active: id === state.tab, filter: state.filter, heads: state.heads };
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, heads, order, selectedId, onSelect, onEntries, onError, onSettled, children }, ref) {
-  const container = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapboxMap | null>(null);
-  const signature = useRef("");
-  const refreshEntries = useRef<() => void>(() => undefined);
-  const sets = useRef<Record<Tab, TabQuery>>({
-    pairs: new TabQuery("pairs", window.location.origin, () => refreshEntries.current()),
-    sanctioned: new TabQuery("sanctioned", window.location.origin, () => refreshEntries.current()),
-  });
-  const latest = useRef({ hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, heads, order, selectedId, onSelect, onEntries, onError, onSettled });
-  latest.current = { hotSpots, tab, track, history, activityFocus, pickedId, onPick, filter, heads, order, selectedId, onSelect, onEntries, onError, onSettled };
+export default function MapView(props: Props) {
+  let container: HTMLDivElement | undefined;
+  const [map, setMap] = createSignal<MapboxMap | undefined>();
+  let signature = "";
+  let refreshEntries: () => void = () => undefined;
+  const sets: Record<Tab, TabQuery> = {
+    pairs: new TabQuery("pairs", window.location.origin, () => refreshEntries()),
+    sanctioned: new TabQuery("sanctioned", window.location.origin, () => refreshEntries()),
+  };
 
-  useImperativeHandle(ref, () => ({
+  const handle: MapHandle = {
     flyTo(entry, always = false) {
-      const map = mapRef.current;
-      if (!map) return false;
-      const zoom = map.getZoom();
+      const current = map();
+      if (!current) return false;
+      const zoom = current.getZoom();
       const far = shouldFly(zoom);
-      const outside = !map.getBounds().contains([entry.lon, entry.lat]);
+      const outside = !current.getBounds().contains([entry.lon, entry.lat]);
       if (!far && !always && !outside) return false;
-      map.flyTo({ center: [entry.lon, entry.lat], zoom: far ? FLY_ZOOM : zoom, essential: true });
+      current.flyTo({ center: [entry.lon, entry.lat], zoom: far ? FLY_ZOOM : zoom, essential: true });
       return true;
     },
     project(point) {
-      const map = mapRef.current;
-      if (!map) return null;
-      const { x, y } = map.project(point);
-      const box = map.getContainer().getBoundingClientRect();
+      const current = map();
+      if (!current) return null;
+      const { x, y } = current.project(point);
+      const box = current.getContainer().getBoundingClientRect();
       return { x: box.left + x, y: box.top + y };
     },
     fitBounds(bounds, padding, maxZoom) {
-      const map = mapRef.current;
-      if (!map) return Promise.resolve();
+      const current = map();
+      if (!current) return Promise.resolve();
       return new Promise<void>((resolve) => {
-        map.once("moveend", () => resolve());
-        map.fitBounds(bounds, { padding, duration: FIT_MS, essential: true, ...(maxZoom === undefined ? {} : { maxZoom }) });
+        current.once("moveend", () => resolve());
+        current.fitBounds(bounds, { padding, duration: FIT_MS, essential: true, ...(maxZoom === undefined ? {} : { maxZoom }) });
       });
     },
     whenSettled() {
-      const map = mapRef.current;
-      if (!map) return Promise.resolve();
+      const current = map();
+      if (!current) return Promise.resolve();
       return new Promise<void>((resolve) => {
         const done = () => {
           clearTimeout(timer);
-          map.off("idle", done);
+          current.off("idle", done);
           resolve();
         };
         const timer = setTimeout(done, SETTLE_TIMEOUT_MS);
-        map.on("idle", done);
-        map.triggerRepaint();
+        current.on("idle", done);
+        current.triggerRepaint();
       });
     },
-  }), []);
+  };
 
-  useEffect(() => {
-    if (!container.current) return undefined;
-    const map = new MapboxMap({
-      container: container.current,
+  onSettled(() => {
+    if (!container) return undefined;
+    props.ref?.(handle);
+    const instance = new MapboxMap({
+      container,
       style: styleFor(TOKEN, STYLE),
       accessToken: TOKEN,
       projection: "mercator",
@@ -124,70 +125,69 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ hotSpots, tab, t
       maxPitch: 0,
       attributionControl: false,
     });
-    mapRef.current = map;
-    const areas = latest.current.hotSpots;
-    map.keyboard.disableRotation();
-    map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-    map.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
-    map.addControl(new AttributionControl({ compact: false }), "bottom-right");
+    const areas = props.hotSpots;
+    instance.keyboard.disableRotation();
+    instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
+    instance.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
+    instance.addControl(new AttributionControl({ compact: false }), "bottom-right");
 
     const labels = areas.features.map((feature) => {
       const label = document.createElement("div");
       label.className = "hot-spot-label";
       label.textContent = feature.properties.label;
-      return new Marker({ element: label, anchor: "bottom" }).setLngLat(topCenter(feature)).addTo(map);
+      return new Marker({ element: label, anchor: "bottom" }).setLngLat(topCenter(feature)).addTo(instance);
     });
 
     const setup = async () => {
-      await addMapImages(map);
-      if (!map.getSource("hot-spots")) map.addSource("hot-spots", { type: "geojson", data: areas });
-      if (!map.getLayer(HOT_SPOT_LINE.id)) map.addLayer(HOT_SPOT_LINE);
-      if (!map.getSource("track")) map.addSource("track", { type: "geojson", data: latest.current.track });
-      if (!map.getLayer(TRACK_LINE.id)) map.addLayer(TRACK_LINE);
-      if (!map.getSource("history")) map.addSource("history", { type: "geojson", data: historyPoints(latest.current.history) });
-      if (!map.getLayer("history")) map.addLayer(historyLayer(latest.current.pickedId));
-      if (!map.getSource(ANCHORS_SOURCE)) map.addSource(ANCHORS_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      await addMapImages(instance);
+      if (!instance.getSource("hot-spots")) instance.addSource("hot-spots", { type: "geojson", data: areas });
+      if (!instance.getLayer(HOT_SPOT_LINE.id)) instance.addLayer(HOT_SPOT_LINE);
+      if (!instance.getSource("track")) instance.addSource("track", { type: "geojson", data: props.track });
+      if (!instance.getLayer(TRACK_LINE.id)) instance.addLayer(TRACK_LINE);
+      if (!instance.getSource("history")) instance.addSource("history", { type: "geojson", data: historyPoints(props.history) });
+      if (!instance.getLayer("history")) instance.addLayer(historyLayer(props.pickedId));
+      if (!instance.getSource(ANCHORS_SOURCE)) instance.addSource(ANCHORS_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       for (const id of TABS) {
-        if (!map.getLayer(anchorId(id))) map.addLayer(anchorLayer(anchorId(id)));
-        sets.current[id].sync(map, queryStyle(latest.current, id));
+        if (!instance.getLayer(anchorId(id))) instance.addLayer(anchorLayer(anchorId(id)));
+        sets[id].sync(instance, queryStyle(props, id));
       }
-      if (latest.current.activityFocus && !map.getSource("activity-focus")) {
-        map.addSource("activity-focus", { type: "vector", tiles: [activityTileUrl(window.location.origin, latest.current.activityFocus.id)], minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+      if (props.activityFocus && !instance.getSource("activity-focus")) {
+        instance.addSource("activity-focus", { type: "vector", tiles: [activityTileUrl(window.location.origin, props.activityFocus.id)], minzoom: 0, maxzoom: MAX_TILE_ZOOM });
       }
-      if (latest.current.activityFocus && !map.getLayer("activity-focus")) map.addLayer(activityFocusLayer());
+      if (props.activityFocus && !instance.getLayer("activity-focus")) instance.addLayer(activityFocusLayer());
     };
-    map.on("style.load", setup);
+    instance.on("style.load", setup);
 
     let frame = 0;
     let settled = false;
     const refresh = () => {
       const done = settled;
       settled = false;
-      const layer = latest.current.tab;
-      if (!sets.current[layer].layerIds().some((id) => map.getLayer(id))) return;
-      const entries = uniqueEntries(map.queryRenderedFeatures({ layers: sets.current[layer].layerIds().filter((id) => map.getLayer(id)) }) as unknown as TileFeature[], layer, latest.current.heads.counts);
+      const layer = props.tab;
+      if (!sets[layer].layerIds().some((id) => instance.getLayer(id))) return;
+      const entries = uniqueEntries(instance.queryRenderedFeatures({ layers: sets[layer].layerIds().filter((id) => instance.getLayer(id)) }) as unknown as TileFeature[], layer, props.heads.counts);
       const next = entries.map((e) => `${e.id}:${e.detections ?? 1}`).sort().join("|");
-      if (next !== signature.current) {
-        signature.current = next;
-        latest.current.onEntries(entries);
+      if (next !== signature) {
+        signature = next;
+        props.onEntries(entries);
       }
-      if (done) latest.current.onSettled();
+      if (done) props.onSettled();
     };
     const schedule = (isIdle: boolean) => {
       settled = settled || isIdle;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(refresh);
     };
-    refreshEntries.current = () => schedule(true);
-    map.on("idle", () => schedule(true));
-    map.on("moveend", () => schedule(false));
+    refreshEntries = () => schedule(true);
+    instance.on("idle", () => schedule(true));
+    instance.on("moveend", () => schedule(false));
 
     const start = featureBounds(areas);
-    if (start) map.fitBounds(start, { padding: 48, maxZoom: START_MAX_ZOOM, duration: 0 });
+    if (start) instance.fitBounds(start, { padding: 48, maxZoom: START_MAX_ZOOM, duration: 0 });
 
     const entryOf = (feature: TileFeature & { layer: { id: string } }, layer: Tab): Entry | null => {
-      if (feature.layer.id !== "history") return toEntry(feature, layer, latest.current.heads.counts);
-      const point = latest.current.history.find((p) => p.id === feature.properties.id);
+      if (feature.layer.id !== "history") return toEntry(feature, layer, props.heads.counts);
+      const point = props.history.find((p) => p.id === feature.properties.id);
       return point ? trackEntry(point) : null;
     };
 
@@ -195,137 +195,152 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ hotSpots, tab, t
     let hoverId: string | null = null;
     const hide = () => {
       hoverId = null;
-      map.getCanvas().style.cursor = "";
+      instance.getCanvas().style.cursor = "";
       popup.remove();
     };
-    map.on("mousemove", (e) => {
-      const layer = latest.current.tab;
-      const layers = [...sets.current[layer].layerIds(), "history"].filter((id) => map.getLayer(id));
+    instance.on("mousemove", (e) => {
+      const layer = props.tab;
+      const layers = [...sets[layer].layerIds(), "history"].filter((id) => instance.getLayer(id));
       if (!layers.length) return;
-      const found = map.queryRenderedFeatures(e.point, { layers })[0];
+      const found = instance.queryRenderedFeatures(e.point, { layers })[0];
       if (!found) return hide();
-      map.getCanvas().style.cursor = "pointer";
+      instance.getCanvas().style.cursor = "pointer";
       const tile = found as unknown as TileFeature;
       if (tile.properties.id === hoverId) return;
       const entry = entryOf(found as unknown as TileFeature & { layer: { id: string } }, layer);
       if (!entry) return hide();
       hoverId = tile.properties.id;
-      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(entry)).addTo(map);
+      popup.setLngLat(tile.geometry.coordinates as [number, number]).setDOMContent(entryCard(entry)).addTo(instance);
     });
-    map.on("mouseout", hide);
-    map.on("click", (e) => {
-      const layer = latest.current.tab;
-      const layers = [...sets.current[layer].layerIds(), "history"].filter((id) => map.getLayer(id));
+    instance.on("mouseout", hide);
+    instance.on("click", (e) => {
+      const layer = props.tab;
+      const layers = [...sets[layer].layerIds(), "history"].filter((id) => instance.getLayer(id));
       if (!layers.length) return;
-      const feature = map.queryRenderedFeatures(e.point, { layers })[0];
+      const feature = instance.queryRenderedFeatures(e.point, { layers })[0];
       if (!feature) return;
       const entry = entryOf(feature as unknown as TileFeature & { layer: { id: string } }, layer);
       if (!entry) return;
-      if ((feature as unknown as { layer: { id: string } }).layer.id === "history") latest.current.onPick(entry);
-      else latest.current.onSelect(entry);
+      if ((feature as unknown as { layer: { id: string } }).layer.id === "history") props.onPick(entry);
+      else props.onSelect(entry);
     });
 
     let lastError = 0;
     let fellBack = false;
-    map.on("error", (e) => {
+    instance.on("error", (e) => {
       const now = Date.now();
       const sourceId = (e as { sourceId?: string }).sourceId;
-      for (const id of TABS) sets.current[id].fail(map, sourceId);
-      if (TABS.some((id) => sets.current[id].owns(sourceId)) || sourceId === "activity-focus") {
-        if (now - lastError > ERROR_GAP_MS) latest.current.onError("Could not load the map data. Check the connection and try again.");
+      for (const id of TABS) sets[id].fail(instance, sourceId);
+      if (TABS.some((id) => sets[id].owns(sourceId)) || sourceId === "activity-focus") {
+        if (now - lastError > ERROR_GAP_MS) props.onError("Could not load the map data. Check the connection and try again.");
         lastError = now;
-      } else if (TOKEN && !fellBack && !map.isStyleLoaded()) {
+      } else if (TOKEN && !fellBack && !instance.isStyleLoaded()) {
         fellBack = true;
-        latest.current.onError("Could not load the basemap. Showing a plain background.");
-        map.setStyle(FALLBACK_STYLE);
+        props.onError("Could not load the basemap. Showing a plain background.");
+        instance.setStyle(FALLBACK_STYLE);
       }
     });
 
+    setMap(instance);
+
     return () => {
       cancelAnimationFrame(frame);
-      labels.forEach((marker) => {
-        marker.remove();
-      });
+      for (const marker of labels) marker.remove();
       popup.remove();
-      map.remove();
-      mapRef.current = null;
+      instance.remove();
     };
-  }, []);
+  });
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    for (const id of TABS) sets.current[id].restyle(map, filter, heads);
-  }, [filter, heads]);
+  createEffect(
+    () => [map(), props.filter, props.heads] as const,
+    ([current, filter, heads]) => {
+      if (!current) return;
+      for (const id of TABS) sets[id].restyle(current, filter, heads);
+    },
+  );
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map?.getLayer(anchorId("pairs"))) return;
-    for (const id of TABS) sets.current[id].sync(map, queryStyle({ ...latest.current, filter }, id));
-  }, [filter]);
+  createEffect(
+    () => [map(), props.filter] as const,
+    ([current]) => {
+      if (!current?.getLayer(anchorId("pairs"))) return;
+      for (const id of TABS) sets[id].sync(current, untrack(() => queryStyle(props, id)));
+    },
+  );
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map?.isStyleLoaded()) return;
-    if (!activityFocus) {
-      if (map.getLayer("activity-focus")) map.removeLayer("activity-focus");
-      if (map.getSource("activity-focus")) map.removeSource("activity-focus");
-      return;
-    }
-    const tiles = [activityTileUrl(window.location.origin, activityFocus.id)];
-    const source = map.getSource("activity-focus") as { setTiles?: (tiles: string[]) => void } | undefined;
-    if (source?.setTiles) source.setTiles(tiles);
-    else {
-      map.addSource("activity-focus", { type: "vector", tiles, minzoom: 0, maxzoom: MAX_TILE_ZOOM });
-      map.addLayer(activityFocusLayer());
-    }
-  }, [activityFocus]);
-
-  useEffect(() => {
-    (mapRef.current?.getSource("track") as GeoJSONSource | undefined)?.setData(track);
-  }, [track]);
-
-  useEffect(() => {
-    (mapRef.current?.getSource("history") as GeoJSONSource | undefined)?.setData(historyPoints(history));
-  }, [history]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map?.getLayer("history")) return;
-    map.setLayoutProperty("history", "icon-image", historyIconImage(pickedId));
-    map.setLayoutProperty("history", "symbol-sort-key", historySortKey(pickedId));
-  }, [pickedId]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    signature.current = "";
-    for (const id of TABS) {
-      for (const layerId of sets.current[id].allIds()) if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", id === tab ? "visible" : "none");
-    }
-    if (map.getLayer(anchorId("pairs"))) for (const id of TABS) sets.current[id].sync(map, queryStyle(latest.current, id));
-  }, [tab]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    for (const id of TABS) {
-      const picked = id === tab ? selectedId : null;
-      for (const layerId of sets.current[id].allIds()) {
-        if (!map.getLayer(layerId)) continue;
-        map.setLayoutProperty(layerId, "icon-image", iconImage(picked, id));
-        map.setLayoutProperty(layerId, "symbol-sort-key", sortKey(order, picked));
+  createEffect(
+    () => [map(), props.activityFocus] as const,
+    ([current, activityFocus]) => {
+      if (!current?.isStyleLoaded()) return;
+      if (!activityFocus) {
+        if (current.getLayer("activity-focus")) current.removeLayer("activity-focus");
+        if (current.getSource("activity-focus")) current.removeSource("activity-focus");
+        return;
       }
-    }
-  }, [order, selectedId, tab]);
+      const tiles = [activityTileUrl(window.location.origin, activityFocus.id)];
+      const source = current.getSource("activity-focus") as { setTiles?: (tiles: string[]) => void } | undefined;
+      if (source?.setTiles) source.setTiles(tiles);
+      else {
+        current.addSource("activity-focus", { type: "vector", tiles, minzoom: 0, maxzoom: MAX_TILE_ZOOM });
+        current.addLayer(activityFocusLayer());
+      }
+    },
+  );
+
+  createEffect(
+    () => [map(), props.track] as const,
+    ([current, track]) => {
+      (current?.getSource("track") as GeoJSONSource | undefined)?.setData(track);
+    },
+  );
+
+  createEffect(
+    () => [map(), props.history] as const,
+    ([current, history]) => {
+      (current?.getSource("history") as GeoJSONSource | undefined)?.setData(historyPoints(history));
+    },
+  );
+
+  createEffect(
+    () => [map(), props.pickedId] as const,
+    ([current, pickedId]) => {
+      if (!current?.getLayer("history")) return;
+      current.setLayoutProperty("history", "icon-image", historyIconImage(pickedId));
+      current.setLayoutProperty("history", "symbol-sort-key", historySortKey(pickedId));
+    },
+  );
+
+  createEffect(
+    () => [map(), props.tab] as const,
+    ([current, tab]) => {
+      if (!current) return;
+      signature = "";
+      for (const id of TABS) {
+        for (const layerId of sets[id].allIds()) if (current.getLayer(layerId)) current.setLayoutProperty(layerId, "visibility", id === tab ? "visible" : "none");
+      }
+      if (current.getLayer(anchorId("pairs"))) for (const id of TABS) sets[id].sync(current, untrack(() => queryStyle(props, id)));
+    },
+  );
+
+  createEffect(
+    () => [map(), props.order, props.selectedId, props.tab] as const,
+    ([current, order, selectedId, tab]) => {
+      if (!current) return;
+      for (const id of TABS) {
+        const picked = id === tab ? selectedId : null;
+        for (const layerId of sets[id].allIds()) {
+          if (!current.getLayer(layerId)) continue;
+          current.setLayoutProperty(layerId, "icon-image", iconImage(picked, id));
+          current.setLayoutProperty(layerId, "symbol-sort-key", sortKey(order, picked));
+        }
+      }
+    },
+  );
 
   return (
-    <main className="map" data-tour="map">
-      <div className="map-canvas" ref={container} />
-      <Legend tab={tab} />
-      {children}
+    <main class="map" data-tour="map">
+      <div class="map-canvas" ref={(el) => (container = el)} />
+      <Legend tab={props.tab} />
+      {props.children}
     </main>
   );
-});
-
-export default MapView;
+}

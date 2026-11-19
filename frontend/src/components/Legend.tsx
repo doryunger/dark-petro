@@ -1,3 +1,4 @@
+import { For } from "solid-js";
 import { PAIR_IMAGES, VESSEL_IMAGES, pairSvg, vesselSvg } from "../lib/icons";
 import type { PairStyle } from "../lib/icons";
 import type { Tab } from "../lib/types";
@@ -24,17 +25,19 @@ export const LEGEND_ITEMS: Record<Tab, Item[]> = {
 
 const ICON_LENGTH_REM = 1.4;
 
-export default function Legend({ tab }: { tab: Tab }) {
+export default function Legend(props: { tab: Tab }) {
   return (
-    <ul className="legend" aria-label="Map legend">
-      {LEGEND_ITEMS[tab].map((item) => (
-        <li className="legend-item" key={item.label}>
-          <span className="legend-swatch">
-            <img className="legend-icon" src={`data:image/svg+xml;utf8,${encodeURIComponent(item.draw(item.style))}`} alt="" style={{ height: `${ICON_LENGTH_REM}rem` }} />
-          </span>
-          <span className="legend-label">{item.label}</span>
-        </li>
-      ))}
+    <ul class="legend" aria-label="Map legend">
+      <For each={LEGEND_ITEMS[props.tab]} keyed={(item) => item.label}>
+        {(item) => (
+          <li class="legend-item">
+            <span class="legend-swatch">
+              <img class="legend-icon" src={`data:image/svg+xml;utf8,${encodeURIComponent(item().draw(item().style))}`} alt="" style={{ height: `${ICON_LENGTH_REM}rem` }} />
+            </span>
+            <span class="legend-label">{item().label}</span>
+          </li>
+        )}
+      </For>
     </ul>
   );
 }
