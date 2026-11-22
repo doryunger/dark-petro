@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 def input_hash(inputs: dict[str, str]) -> str:

@@ -37,7 +37,7 @@ HOT_SPOTS = {"type": "FeatureCollection", "features": [
 
 def finding(n: int, source: str, day: int, **over) -> dict:
     base = {
-        "finding_id": f"{source}_202610{day:02d}T060000_{n}", "lat": 24.6 + n / 1000, "lon": 57.5 + n / 1000, "hot_spot": "off_sohar", "source": source,
+        "finding_id": f"{source}_202610{day:02d}T060000_{n}", "detection_id": f"DET-{n}" if n == 1 else None, "lat": 24.6 + n / 1000, "lon": 57.5 + n / 1000, "hot_spot": "off_sohar", "source": source,
         "capture_utc": datetime(2026, 10, day, 6, 0, 0, tzinfo=timezone.utc), "capture_png": f"captures/{n}.png",
         "vessel_1_lat": 24.6, "vessel_1_lon": 57.5, "vessel_1_name": f"VESSEL ONE {n}", "vessel_1_flag": "PA", "vessel_1_is_sanctioned": False, "vessel_1_imo": 9123456,
         "vessel_2_lat": 24.6004, "vessel_2_lon": 57.5004, "vessel_2_name": None, "vessel_2_flag": "KM", "vessel_2_is_sanctioned": True,
@@ -47,7 +47,7 @@ def finding(n: int, source: str, day: int, **over) -> dict:
 
 def sanctioned_finding(n: int, source: str, day: int, **over) -> dict:
     base = {
-        "finding_id": f"{source}_202610{day:02d}T060000_w0-{n}", "lat": 25.1 + n / 1000, "lon": 56.5 + n / 1000, "hot_spot": "fujairah_outer", "source": source,
+        "finding_id": f"{source}_202610{day:02d}T060000_w0-{n}", "detection_id": f"SAN-{n}" if n == 1 else None, "lat": 25.1 + n / 1000, "lon": 56.5 + n / 1000, "hot_spot": "fujairah_outer", "source": source,
         "capture_utc": datetime(2026, 10, day, 6, 0, 0, tzinfo=timezone.utc), "capture_png": f"captures/s{n}.png",
         "vessel_name": f"SANCTIONED {n}", "vessel_flag": "ST", "vessel_imo": "9257149", "heading_deg": 45.0 if n == 1 else None,
     }
@@ -135,6 +135,55 @@ class Parsing(unittest.TestCase):
 
 
 @unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")
+class BuildWithoutDetectionId(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        root = Path(cls.tmp.name)
+        build = root / "builds" / "b1"
+        build.mkdir(parents=True)
+        pairs = {k: v for k, v in B.TABLE_TYPES.items() if k != "detection_id"}
+        singles = {k: v for k, v in B.SANCTIONED_TYPES.items() if k != "detection_id"}
+        B.write_table([finding(1, "s1", 10)], build / "findings.parquet", pairs)
+        B.write_table([sanctioned_finding(1, "s1", 12)], build / "sanctioned.parquet", singles)
+        span = ["2026-10-10T06:00:00+00:00", "2026-10-12T06:00:00+00:00"]
+        (build / "manifest.json").write_text(json.dumps({"build_id": "b1", "by_source": {"s1": 1}, "time_range": span, "sanctioned": {"by_source": {"s1": 1}, "time_range": span}}))
+        (root / "current").symlink_to("builds/b1")
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), V.make_handler(V.Store(make_config(root))))
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.tmp.cleanup()
+
+    def get(self, path):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1])
+        conn.request("GET", path)
+        r = conn.getresponse()
+        body = r.read()
+        conn.close()
+        return r.status, body
+
+    def test_tiles_still_serve_without_the_column(self):
+        for path, layer in (("/tiles/0/0/0.mvt", "s1_20261010T060000_1"), ("/tiles/sanctioned/0/0/0.mvt", "s1_20261012T060000_w0-1")):
+            status, body = self.get(path)
+            self.assertEqual(status, 200, path)
+            features = mvt.decode(body)
+            self.assertEqual([f["id"] for f in features], [layer])
+            self.assertNotIn("detection_id", features[0])
+
+    def test_tracks_and_activities_report_no_detection_id(self):
+        status, body = self.get("/tracks/9257149")
+        self.assertEqual(status, 200)
+        self.assertEqual([p["detection_id"] for p in json.loads(body)["points"]], [None])
+        status, body = self.get("/activities/9123456")
+        self.assertEqual(status, 200)
+        self.assertEqual([r["detection_id"] for r in json.loads(body)["activities"]], [None])
+
+
+@unittest.skipUnless(spatial_available(), "the DuckDB spatial extension is not installed")
 class Serving(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -186,6 +235,8 @@ class Serving(unittest.TestCase):
         self.assertEqual((one["v1_name"], one["v1_flag"], one["v1_imo"], one["v1_sanctioned"]), ("VESSEL ONE 1", "PA", "9123456", False))
         self.assertEqual((one["v2_flag"], one["v2_sanctioned"], one["sanctioned"]), ("KM", True, True))
         self.assertIn("yaw", one)
+        self.assertEqual(one["detection_id"], "DET-1")
+        self.assertNotIn("detection_id", features["s2_20261020T060000_2"])
         self.assertEqual((one["lon"], one["lat"]), (57.501, 24.601))
         self.assertNotIn("v2_name", one)
         self.assertNotIn("v2_imo", one)
@@ -210,9 +261,11 @@ class Serving(unittest.TestCase):
         self.assertIn("t", one)
         self.assertNotIn("v2_name", one)
         self.assertEqual(one["yaw"], 45.0)
+        self.assertEqual(one["detection_id"], "SAN-1")
         _, _, every = self.get("/tiles/sanctioned/0/0/0.mvt")
         newest = {f["id"]: f for f in mvt.decode(every)}["s1_20261021T060000_w0-2"]
         self.assertNotIn("yaw", newest)
+        self.assertNotIn("detection_id", newest)
 
     def test_a_vessel_seen_twice_has_every_detection_in_the_tile_without_a_count(self):
         _, _, body = self.get("/tiles/sanctioned/0/0/0.mvt")
@@ -244,8 +297,16 @@ class Serving(unittest.TestCase):
         track = json.loads(body)
         self.assertEqual(track["imo"], "9257149")
         self.assertEqual([p["id"] for p in track["points"]], ["s1_20261021T060000_w0-2", "s1_20261012T060000_w0-1"])
-        self.assertEqual(track["points"][0], {"id": "s1_20261021T060000_w0-2", "date": "2026-10-21", "t": 1792562400, "hot_spot": "fujairah_outer", "source": "s1", "image": "captures/s2.png", "yaw": None, "lon": 56.502, "lat": 25.102, "name": "SANCTIONED 2", "flag": "ST", "imo": "9257149"})
+        self.assertEqual(track["points"][0], {"id": "s1_20261021T060000_w0-2", "detection_id": None, "date": "2026-10-21", "t": 1792562400, "hot_spot": "fujairah_outer", "source": "s1", "image": "captures/s2.png", "yaw": None, "lon": 56.502, "lat": 25.102, "name": "SANCTIONED 2", "flag": "ST", "imo": "9257149"})
         self.assertEqual(track["points"][1]["yaw"], 45.0)
+        self.assertEqual([p["detection_id"] for p in track["points"]], [None, "SAN-1"])
+
+    def test_activity_records_carry_the_detection_id_when_there_is_one(self):
+        status, _, body = self.get("/activities/9123456")
+        self.assertEqual(status, 200)
+        records = {r["id"]: r for r in json.loads(body)["activities"]}
+        self.assertEqual(records["s1_20261010T060000_1"]["detection_id"], "DET-1")
+        self.assertIsNone(records["s2_20261020T060000_2"]["detection_id"])
 
     def test_a_vessel_track_follows_the_filters_and_is_empty_for_an_unknown_vessel(self):
         _, _, body = self.get("/tracks/9257149?from=2026-10-20&to=2026-10-22&source=s1")

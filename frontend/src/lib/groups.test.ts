@@ -20,6 +20,12 @@ describe("groups", () => {
     expect(e.vessels).toEqual([{ name: "AUROURA", flag: "PA", imo: "9262912", sanctioned: true, known: true }]);
   });
 
+  it("shows the detection ID on a reel entry when the point has one and keeps the finding ID as the key", () => {
+    const e = trackEntry({ ...point("s1_20261019T141603_w0-44977-274982", 5), detection_id: "det-9" });
+    expect(e).toMatchObject({ id: "s1_20261019T141603_w0-44977-274982", detectionId: "det-9", shortId: "det-9" });
+    expect(trackEntry({ ...point("s1_20261019T141603_w0-44977-274982", 5), detection_id: null })).toMatchObject({ detectionId: null, shortId: "44977-274982" });
+  });
+
   it("sizes the history box to its rows and never above the maximum", () => {
     expect(historyHeight(1)).toBe(2.25);
     expect(historyHeight(2)).toBe(4);
