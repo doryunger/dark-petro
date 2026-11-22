@@ -37,6 +37,7 @@ def read_rows(mirror: Path, keys: list[str]) -> list[dict]:
 
 TABLE_TYPES = {
     "finding_id": pa.string(),
+    "detection_id": pa.string(),
     "lat": pa.float64(),
     "lon": pa.float64(),
     "capture_utc": pa.timestamp("us", tz="UTC"),
@@ -50,6 +51,7 @@ TABLE_TYPES = {
 
 SANCTIONED_TYPES = {
     "finding_id": pa.string(),
+    "detection_id": pa.string(),
     "lat": pa.float64(),
     "lon": pa.float64(),
     "capture_utc": pa.timestamp("us", tz="UTC"),

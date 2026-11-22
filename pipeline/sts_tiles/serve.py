@@ -23,7 +23,7 @@ FINDING_ID_TEXT = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
 ALLOWED_PARAMS = {"from", "to", "source"}
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 TILE_MARGIN = 0.1
-TILE_REVISION = 4
+TILE_REVISION = 5
 
 TILE_SQL = """
 SELECT ST_AsMVT({%PROPS%}, '%LAYER%')
@@ -35,7 +35,7 @@ FROM (
       strftime(capture_utc, '%Y-%m-%d') AS day,
       epoch(capture_utc)::BIGINT AS t%DERIVED%
     FROM (
-      SELECT *
+      SELECT *{fill}
       FROM read_parquet(?)
       WHERE true{extra}
     )
@@ -46,7 +46,7 @@ WHERE geom IS NOT NULL
 """
 
 PAIR_PROPS = """
-  'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
+  'geom': geom, 'id': finding_id, 'detection_id': detection_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
   'sanctioned': sanctioned, 'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
   'v1_name': vessel_1_name, 'v1_flag': vessel_1_flag, 'v1_imo': vessel_1_imo, 'v1_sanctioned': v1_sanctioned,
   'v2_name': vessel_2_name, 'v2_flag': vessel_2_flag, 'v2_imo': vessel_2_imo, 'v2_sanctioned': v2_sanctioned
@@ -58,7 +58,7 @@ PAIR_DERIVED = """,
       coalesce(vessel_1_is_sanctioned, false) OR coalesce(vessel_2_is_sanctioned, false) AS sanctioned"""
 
 SANCTIONED_PROPS = """
-  'geom': geom, 'id': finding_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
+  'geom': geom, 'id': finding_id, 'detection_id': detection_id, 'date': day, 't': t, 'hot_spot': hot_spot, 'source': source,
   'image': capture_png, 'yaw': yaw, 'lon': round(lon, 6), 'lat': round(lat, 6),
   'v1_name': vessel_name, 'v1_flag': vessel_flag, 'v1_imo': vessel_imo
 """
@@ -77,7 +77,7 @@ ORDER BY capture_utc, finding_id
 """
 
 TRACK_SQL = """
-SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png, yaw,
+SELECT finding_id, {detection}, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png, yaw,
   round(lon, 6), round(lat, 6), vessel_name, vessel_flag, vessel_imo
 FROM read_parquet(?)
 WHERE vessel_imo = ?{extra}
@@ -85,7 +85,7 @@ ORDER BY capture_utc DESC, finding_id
 """
 
 ACTIVITY_SQL = """
-SELECT finding_id, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png,
+SELECT finding_id, {detection}, strftime(capture_utc, '%Y-%m-%d'), epoch(capture_utc)::BIGINT, hot_spot, source, capture_png,
   round(lon, 6), round(lat, 6),
   coalesce(vessel_1_is_sanctioned, false) OR coalesce(vessel_2_is_sanctioned, false),
   vessel_1_name, vessel_1_flag, vessel_1_imo, coalesce(vessel_1_is_sanctioned, false),
@@ -207,9 +207,14 @@ def etag_for(build_id: str, path: str, query: str) -> str:
     return '"' + hashlib.sha1(key.encode()).hexdigest()[:20] + '"'
 
 
+MISSING_DETECTION_FILL = ", NULL::VARCHAR AS detection_id"
+MISSING_DETECTION_VALUE = "NULL::VARCHAR"
+
+
 class Store:
     def __init__(self, cfg):
         self.cfg = cfg
+        self.detection_columns: dict[tuple[str, int], bool] = {}
         self.con = duckdb.connect()
         self.con.execute("SET TimeZone = 'UTC'")
         self.con.execute("SET memory_limit = ?", [cfg.duckdb_memory])
@@ -217,6 +222,20 @@ class Store:
         self.con.execute("SET extension_directory = ?", [cfg.extension_dir])
         self.con.execute("SET autoinstall_known_extensions = false")
         self.con.execute("LOAD spatial")
+
+    def has_detection_id(self, source: Path) -> bool:
+        key = (str(source), source.stat().st_mtime_ns)
+        if key not in self.detection_columns:
+            cur = self.con.cursor()
+            try:
+                found = cur.execute("SELECT count(*) FROM parquet_schema(?) WHERE name = 'detection_id'", [str(source)]).fetchone()[0]
+            finally:
+                cur.close()
+            self.detection_columns = {k: v for k, v in self.detection_columns.items() if k[0] != key[0]} | {key: found > 0}
+        return self.detection_columns[key]
+
+    def detection_value(self, source: Path) -> str:
+        return "detection_id" if self.has_detection_id(source) else MISSING_DETECTION_VALUE
 
     def manifest(self) -> dict | None:
         try:
@@ -249,10 +268,10 @@ class Store:
         extra, args = filter_clause(filters)
         cur = self.con.cursor()
         try:
-            rows = cur.execute(TRACK_SQL.replace("{extra}", extra), [str(source), imo, *args]).fetchall()
+            rows = cur.execute(TRACK_SQL.replace("{extra}", extra).replace("{detection}", self.detection_value(source)), [str(source), imo, *args]).fetchall()
         finally:
             cur.close()
-        keys = ("id", "date", "t", "hot_spot", "source", "image", "yaw", "lon", "lat", "name", "flag", "imo")
+        keys = ("id", "detection_id", "date", "t", "hot_spot", "source", "image", "yaw", "lon", "lat", "name", "flag", "imo")
         return [dict(zip(keys, r)) for r in rows]
 
     def activities(self, imo: str, filters: dict) -> list[dict]:
@@ -262,10 +281,10 @@ class Store:
         extra, args = filter_clause(filters)
         cur = self.con.cursor()
         try:
-            rows = cur.execute(ACTIVITY_SQL.replace("{extra}", extra), [str(source), imo, imo, *args]).fetchall()
+            rows = cur.execute(ACTIVITY_SQL.replace("{extra}", extra).replace("{detection}", self.detection_value(source)), [str(source), imo, imo, *args]).fetchall()
         finally:
             cur.close()
-        keys = ("id", "date", "t", "hot_spot", "source", "image", "lon", "lat", "sanctioned", "v1_name", "v1_flag", "v1_imo", "v1_sanctioned", "v2_name", "v2_flag", "v2_imo", "v2_sanctioned")
+        keys = ("id", "detection_id", "date", "t", "hot_spot", "source", "image", "lon", "lat", "sanctioned", "v1_name", "v1_flag", "v1_imo", "v1_sanctioned", "v2_name", "v2_flag", "v2_imo", "v2_sanctioned")
         return [dict(zip(keys, row)) for row in rows]
 
     def activity_imos(self, filters: dict) -> list[str]:
@@ -292,7 +311,7 @@ class Store:
             args.append(filters["id"])
         cur = self.con.cursor()
         try:
-            row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra), [z, x, y, str(source), *args, west, east, south, north]).fetchone()
+            row = cur.execute(LAYERS[layer]["sql"].replace("{extra}", extra).replace("{fill}", "" if self.has_detection_id(source) else MISSING_DETECTION_FILL), [z, x, y, str(source), *args, west, east, south, north]).fetchone()
         finally:
             cur.close()
         return bytes(row[0]) if row and row[0] else b""

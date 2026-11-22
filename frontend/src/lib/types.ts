@@ -24,6 +24,7 @@ export interface Vessel {
 export interface Entry {
   id: string;
   tab: Tab;
+  detectionId: string | null;
   shortId: string;
   date: string;
   t: number;
@@ -47,6 +48,7 @@ export interface SanctionedDetection {
 
 export interface TrackPoint {
   id: string;
+  detection_id?: string | null;
   date: string;
   t: number;
   hot_spot: string;
@@ -66,6 +68,7 @@ export interface ActivityMatch {
 
 export interface ActivityRecord {
   id: string;
+  detection_id?: string | null;
   date: string;
   t: number;
   hot_spot: string;
@@ -96,6 +99,7 @@ export interface HistoryCollection {
 
 export interface TileProperties {
   id: string;
+  detection_id?: string;
   date: string;
   t: number;
   hot_spot: string;

@@ -10,7 +10,8 @@ export function trackEntry(point: TrackPoint): Entry {
   return {
     id: point.id,
     tab: "sanctioned",
-    shortId: shortId(point.id),
+    detectionId: point.detection_id ?? null,
+    shortId: shortId(point.id, point.detection_id),
     date: point.date,
     t: point.t,
     hotSpot: point.hot_spot,

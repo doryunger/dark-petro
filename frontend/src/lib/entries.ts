@@ -3,7 +3,9 @@ import type { ActivityMatch, ActivityRecord, Entry, HotSpotCollection, Order, Ta
 
 let labels: Record<string, string> = {};
 
-export function shortId(id: string): string {
+export function shortId(id: string, detectionId?: string | null): string {
+  const detection = detectionId?.trim();
+  if (detection) return detection;
   return id.split("_").slice(2).join("_").replace(/^w\d+-/, "");
 }
 
@@ -46,7 +48,8 @@ export function toEntry(feature: TileFeature, tab: Tab = "pairs", counts?: Recor
   return {
     id: p.id,
     tab,
-    shortId: shortId(p.id),
+    detectionId: p.detection_id ?? null,
+    shortId: shortId(p.id, p.detection_id),
     date: p.date,
     t: p.t,
     hotSpot: p.hot_spot,
@@ -76,7 +79,8 @@ export function toActivityMatch(record: ActivityRecord): ActivityMatch {
     entry: {
       id: record.id,
       tab: "pairs",
-      shortId: shortId(record.id),
+      detectionId: record.detection_id ?? null,
+      shortId: shortId(record.id, record.detection_id),
       date: record.date,
       t: record.t,
       hotSpot: record.hot_spot,

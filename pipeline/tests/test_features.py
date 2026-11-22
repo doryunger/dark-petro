@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from sts_tiles import build as B
@@ -133,6 +134,15 @@ class Table(unittest.TestCase):
         for name, kind in B.SANCTIONED_TYPES.items():
             self.assertEqual(table.schema.field(name).type, kind, name)
         self.assertEqual(table.column("vessel_imo").to_pylist(), ["9257149"])
+
+    def test_detection_id_is_published_as_text_and_is_empty_when_the_source_has_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            pairs, sanctioned = Path(d) / "findings.parquet", Path(d) / "sanctioned.parquet"
+            B.write_table([row(detection_id="det-abc"), row(finding_id="b")], pairs)
+            B.write_table([single(detection_id="det-xyz"), single(finding_id="b")], sanctioned, B.SANCTIONED_TYPES)
+            self.assertEqual(pq.read_table(pairs).column("detection_id").to_pylist(), ["det-abc", None])
+            self.assertEqual(pq.read_table(sanctioned).column("detection_id").to_pylist(), ["det-xyz", None])
+            self.assertEqual(pq.read_table(pairs).schema.field("detection_id").type, pa.string())
 
     def test_sanctioned_vessel_yaw_is_the_published_heading_and_empty_without_one(self):
         with tempfile.TemporaryDirectory() as d:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryIconClass, entryTitle, hotSpotLabel, pinFirst, setHotSpotLabels, shortId, sortEntries, sourceName, toEntry, uniqueEntries } from "./entries";
+import { entryIconClass, entryTitle, hotSpotLabel, pinFirst, setHotSpotLabels, shortId, sortEntries, sourceName, toActivityMatch, toEntry, uniqueEntries } from "./entries";
 import type { Entry, TileFeature } from "./types";
 
 const feature = (id: string, extra: Record<string, string | number | boolean | undefined> = {}): TileFeature => ({
@@ -12,6 +12,13 @@ describe("entries", () => {
     expect(shortId("s2_20261021T065238_56045-272349")).toBe("56045-272349");
     expect(shortId("s1_20261021T021407_a_b-1")).toBe("a_b-1");
     expect(shortId("s1_20261022T224733_w0-33113-13846")).toBe("33113-13846");
+  });
+
+  it("shows the detection ID when there is one and falls back to the position-based ID when it is missing or blank", () => {
+    expect(shortId("s2_20261021T065238_56045-272349", "det-0042")).toBe("det-0042");
+    expect(shortId("s2_20261021T065238_56045-272349", null)).toBe("56045-272349");
+    expect(shortId("s2_20261021T065238_56045-272349", undefined)).toBe("56045-272349");
+    expect(shortId("s2_20261021T065238_56045-272349", "  ")).toBe("56045-272349");
   });
 
   it("names the hot spots and the sources", () => {
@@ -32,6 +39,21 @@ describe("entries", () => {
     expect(e).toMatchObject({ shortId: "56045-272349", date: "2026-10-21", hotSpot: "off_sohar", source: "s2", sanctioned: true, image: "captures/a.png", lon: 57.5973, lat: 24.6244 });
     expect(e.vessels[0]).toEqual({ name: "ONE", flag: "PA", imo: "9123456", sanctioned: false, known: true });
     expect(e.vessels[1]).toEqual({ name: null, flag: "KM", imo: null, sanctioned: true, known: false });
+  });
+
+  it("takes the displayed ID from the tile's detection ID and keeps the finding ID as the key", () => {
+    const withId = toEntry(feature("s2_20261021T065238_56045-272349", { detection_id: "det-0042" }));
+    expect(withId).toMatchObject({ id: "s2_20261021T065238_56045-272349", detectionId: "det-0042", shortId: "det-0042" });
+    const without = toEntry(feature("s2_20261021T065238_56045-272349"));
+    expect(without).toMatchObject({ id: "s2_20261021T065238_56045-272349", detectionId: null, shortId: "56045-272349" });
+    const single = toEntry(feature("s1_20261019T141603_w0-44977-274982", { detection_id: "det-7" }), "sanctioned");
+    expect(single).toMatchObject({ detectionId: "det-7", shortId: "det-7" });
+  });
+
+  it("shows the detection ID on an activity line when the record has one", () => {
+    const record = { id: "s2_20261021T065238_56045-272349", date: "2026-10-21", t: 1, hot_spot: "off_sohar", source: "s2", image: null, lon: 1, lat: 2, sanctioned: false, v1_name: null, v1_flag: null, v1_imo: null, v1_sanctioned: false, v2_name: null, v2_flag: null, v2_imo: null, v2_sanctioned: false };
+    expect(toActivityMatch({ ...record, detection_id: "det-5" }).entry).toMatchObject({ detectionId: "det-5", shortId: "det-5" });
+    expect(toActivityMatch(record).entry).toMatchObject({ detectionId: null, shortId: "56045-272349" });
   });
 
   it("reads a sanctioned vessel as one sanctioned vessel, whatever the tile says about pairs", () => {
