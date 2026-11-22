@@ -2,6 +2,8 @@ import type { StyleSpecification } from "mapbox-gl";
 
 const DEFAULT_STYLE = "mapbox/navigation-night-v1";
 
+export const STYLE_CONFIG = { basemap: { lightPreset: "dawn" } };
+
 export const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
   sources: {},

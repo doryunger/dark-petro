@@ -9,7 +9,7 @@ import type { Heads } from "../lib/heads";
 import { addMapImages } from "../lib/icons";
 import { trackEntry } from "../lib/groups";
 import { ANCHORS_SOURCE, HOT_SPOT_LINE, TRACK_LINE, activityFocusLayer, anchorLayer, historyIconImage, historyLayer, historySortKey, iconImage, sortKey } from "../lib/layers";
-import { FALLBACK_STYLE, styleFor } from "../lib/mapbox";
+import { FALLBACK_STYLE, STYLE_CONFIG, styleFor } from "../lib/mapbox";
 import { type QueryStyle, TabQuery, anchorId } from "../lib/queryLayers";
 import { entryCard } from "../lib/popup";
 import { historyPoints } from "../lib/track";
@@ -112,6 +112,7 @@ export default function MapView(props: Props) {
     const instance = new MapboxMap({
       container,
       style: styleFor(TOKEN, STYLE),
+      config: STYLE_CONFIG,
       accessToken: TOKEN,
       projection: "mercator",
       center: [81, 13],
