@@ -89,12 +89,12 @@ sanctions list is recorded as a sanctioned vessel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
-  <img alt="Watch for new satellite passes, prepare the imagery, detect ships and STS activity, add AIS and sanctions, publish the data for viewing" src="docs/img/pipeline-light.svg">
+  <img alt="Watch for new satellite passes, download and tile the satellite scenes, detect ships and STS activity, add AIS and sanctions, publish the data for viewing" src="docs/img/pipeline-light.svg">
 </picture>
 
 1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
    job.
-2. **Process.** The imagery is prepared, ships are detected and STS activity is found, as described above.
+2. **Process.** The satellite scenes are downloaded and cut into tiles, then ships are detected and STS activity is found, as described above.
 3. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
 4. **Publish.** The findings are saved and prepared for viewing, and the web viewer rebuilds its public copy whenever they change.
 
@@ -102,7 +102,7 @@ sanctions list is recorded as a sanctioned vessel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-columns-dark.svg">
-  <img alt="In three columns: the control host on a remote machine, the shared cloud storage (S3) in the middle, and the on-demand workers on the right. The control host sends a job to the prep worker, which writes prepared imagery to storage and hands over to the GPU worker. The GPU worker reads the prepared imagery and writes findings to storage, and the control host reads the findings from there" src="docs/img/architecture-columns-light.svg">
+  <img alt="In three columns: the control host on a remote machine, the shared cloud storage (S3) in the middle, and the on-demand workers on the right. The control host sends a job to the prep worker, which writes the tiled scenes to storage and hands over to the GPU worker. The GPU worker reads the tiled scenes and writes findings to storage, and the control host reads the findings from there" src="docs/img/architecture-columns-light.svg">
 </picture>
 
 The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own disks only as scratch space.
