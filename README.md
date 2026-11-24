@@ -87,10 +87,10 @@ sanctions list is recorded as a sanctioned vessel.
 
 ### The pipeline
 
-```mermaid
-flowchart LR
-    A["Watch for new<br/>satellite passes"] --> B["Prepare<br/>the imagery"] --> C["Detect ships<br/>and STS activity"] --> D["Add AIS<br/>and sanctions"] --> E["Review"] --> F["Web app"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
+  <img alt="Watch for new satellite passes, prepare the imagery, detect ships and STS activity, add AIS and sanctions, review, web app" src="docs/img/pipeline-light.svg">
+</picture>
 
 1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
    job.
@@ -101,19 +101,10 @@ flowchart LR
 
 ### On the actual architecture
 
-```mermaid
-flowchart LR
-    CH["<b>Control host</b> (always on)<br/>AIS collection and archive<br/>job manager<br/>review app and web app"]
-    PW["<b>Prep worker</b> (on demand)<br/>prepares the imagery"]
-    GW["<b>GPU worker</b> (on demand)<br/>detects, adds AIS, publishes"]
-    ST[("<b>Storage</b><br/>findings and images")]
-    CH -->|jobs| PW
-    CH -->|jobs| GW
-    PW -->|prepared imagery| ST
-    ST --> GW
-    GW -->|findings| ST
-    ST -->|findings| CH
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.svg">
+  <img alt="The control host sends jobs to the prep worker and the GPU worker; they exchange prepared imagery and findings through storage, and findings return to the control host" src="docs/img/architecture-light.svg">
+</picture>
 
 The control host starts the two workers only when there are jobs.
 
