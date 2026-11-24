@@ -2,16 +2,16 @@
 <title id="t">Architecture</title>
 <desc id="d">The control host, on a remote machine, sends a job to the prep worker. The prep worker writes tiled scenes to shared cloud storage (S3) and hands over to the GPU worker, which reads the tiled scenes from storage and writes findings back. The control host reads the findings from storage.</desc>
 <style>
-text { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+text { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e6edf3; }
 .bold { font-weight: 600; }
-.muted { fill: #57606a; font-size: 12px; }
-.panel { fill: #f6f8fa; stroke: #d0d7de; }
-.box { fill: #ffffff; stroke: #57606a; }
-.item { fill: #ddf4ff; stroke: #0969da; }
-.arrow { fill: none; stroke: #57606a; stroke-width: 1.5; marker-end: url(#h); }
-.title { font-weight: 600; font-size: 12px; fill: #57606a; }
+.muted { fill: #9198a1; font-size: 12px; }
+.panel { fill: #161b22; stroke: #30363d; }
+.box { fill: #0d1117; stroke: #8b949e; }
+.item { fill: #10243e; stroke: #388bfd; }
+.arrow { fill: none; stroke: #8b949e; stroke-width: 1.5; marker-end: url(#h); }
+.title { font-weight: 600; font-size: 12px; fill: #9198a1; }
 </style>
-<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker></defs>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/></marker></defs>
 
 <rect class="panel" x="20" y="70" width="200" height="260" rx="8"/>
 <text class="title" x="34" y="90">Remote machine</text>
@@ -22,11 +22,11 @@ text { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill:
 <text class="title" x="784" y="90">On-demand workers</text>
 
 <rect class="box" x="28" y="140" width="184" height="140" rx="6"/>
-<text x="120" y="165" text-anchor="middle" class="bold">Control host</text>
-<text x="120" y="182" text-anchor="middle" class="muted">(always on)</text>
-<text x="120" y="199" text-anchor="middle" class="">AIS archive</text>
-<text x="120" y="216" text-anchor="middle" class="">job queue</text>
-<text x="120" y="233" text-anchor="middle" class="">review app and web viewer</text>
+<text x="120" y="179" text-anchor="middle" class="bold">Control host</text>
+<text x="120" y="196" text-anchor="middle" class="muted">(always on)</text>
+<text x="120" y="213" text-anchor="middle" class="">AIS archive</text>
+<text x="120" y="230" text-anchor="middle" class="">job queue</text>
+<text x="120" y="247" text-anchor="middle" class="">web viewer</text>
 
 <rect class="item" x="410" y="122" width="160" height="36" rx="6"/>
 <text x="490" y="145" text-anchor="middle">Tiled scenes</text>
