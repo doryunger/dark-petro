@@ -96,7 +96,7 @@ sanctions list is recorded as a sanctioned vessel.
    job.
 2. **Process.** The imagery is prepared, ships are detected and STS activity is found, as described above.
 3. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
-4. **Publish.** The findings are saved and prepared for viewing, and the web app rebuilds its public copy whenever they change.
+4. **Publish.** The findings are saved and prepared for viewing, and the web viewer rebuilds its public copy whenever they change.
 
 ### On the actual architecture
 
