@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { dayIndex, formatDate, fromDayIndex } from "../lib/dates";
 
 interface Props {
@@ -8,43 +7,43 @@ interface Props {
   onChange: (next: [number, number]) => void;
 }
 
-export default function RangeSlider({ min, max, value, onChange }: Props) {
-  const low = dayIndex(min);
-  const high = dayIndex(max);
-  const span = Math.max(high - low, 1);
-  const [start, end] = value;
-  const style = { "--start": (start - low) / span, "--end": (end - low) / span } as CSSProperties;
+export default function RangeSlider(props: Props) {
+  const low = () => dayIndex(props.min);
+  const high = () => dayIndex(props.max);
+  const span = () => Math.max(high() - low(), 1);
+  const start = () => props.value[0];
+  const end = () => props.value[1];
   return (
-    <div className="range">
-      <div className="range-limits">
-        <span>{formatDate(min)}</span>
-        <span>{formatDate(max)}</span>
+    <div class="range">
+      <div class="range-limits">
+        <span>{formatDate(props.min)}</span>
+        <span>{formatDate(props.max)}</span>
       </div>
-      <div className="range-track" style={style}>
-        <span className="range-fill" />
+      <div class="range-track" style={{ "--start": (start() - low()) / span(), "--end": (end() - low()) / span() }}>
+        <span class="range-fill" />
         <input
-          className="range-input"
+          class="range-input"
           type="range"
-          min={low}
-          max={high}
-          value={start}
+          min={low()}
+          max={high()}
+          value={start()}
           aria-label="From"
-          style={{ zIndex: start >= high ? 4 : 2 }}
-          onChange={(e) => onChange([Math.min(Number(e.target.value), end), end])}
+          style={{ "z-index": start() >= high() ? 4 : 2 }}
+          onInput={(e) => props.onChange([Math.min(Number(e.currentTarget.value), end()), end()])}
         />
         <input
-          className="range-input"
+          class="range-input"
           type="range"
-          min={low}
-          max={high}
-          value={end}
+          min={low()}
+          max={high()}
+          value={end()}
           aria-label="To"
-          style={{ zIndex: 3 }}
-          onChange={(e) => onChange([start, Math.max(Number(e.target.value), start)])}
+          style={{ "z-index": 3 }}
+          onInput={(e) => props.onChange([start(), Math.max(Number(e.currentTarget.value), start())])}
         />
       </div>
-      <div className="range-label">
-        {formatDate(fromDayIndex(start))} – {formatDate(fromDayIndex(end))}
+      <div class="range-label">
+        {formatDate(fromDayIndex(start()))} – {formatDate(fromDayIndex(end()))}
       </div>
     </div>
   );

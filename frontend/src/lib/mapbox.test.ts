@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { FALLBACK_STYLE, stylePath, styleFor } from "./mapbox";
+import { FALLBACK_STYLE, STYLE_CONFIG, stylePath, styleFor } from "./mapbox";
 
 describe("mapbox", () => {
   it("uses the Navigation Night style when there is a token and no custom style, and a plain background when there is no token", () => {
     expect(styleFor("pk.test")).toBe("mapbox://styles/mapbox/navigation-night-v1");
     expect(styleFor("")).toBe(FALLBACK_STYLE);
     expect(FALLBACK_STYLE.layers[0].type).toBe("background");
+  });
+
+  it("always sets the Standard light preset to dawn", () => {
+    expect(STYLE_CONFIG).toEqual({ basemap: { lightPreset: "dawn" } });
   });
 
   it("takes a custom style as a mapbox:// address or as user/id", () => {

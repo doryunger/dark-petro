@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { TOUR_HOT_SPOT } from "../lib/constants";
+import { createEffect, createMemo, createSignal, For, onSettled, Show } from "solid-js";
+import { START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
 import { featureBounds } from "../lib/geo";
 import { minSide, padRect, placeCard, rectOfPoints, type Point, type Rect, type Size } from "../lib/tour";
 import type { Bounds, Entry, HotSpotCollection, HotSpotFeature, Tab, TrackPoint } from "../lib/types";
@@ -15,6 +15,7 @@ const HIGHLIGHT_RADIUS_PX = 4;
 const FIT_PADDING_PX = 150;
 const TRACK_MAX_ZOOM = 12;
 const HISTORY_WAIT_MS = 5000;
+const RESET_PADDING_PX = 48;
 
 type Target = "none" | "spots" | "reel" | "details" | "pair" | "tabs" | "card" | "history" | "track" | "filters";
 
@@ -43,21 +44,21 @@ const STEPS: Step[] = [
   },
   {
     id: "reel",
-    title: "Cards",
-    body: "Every detection in the current map view is a card, with its hot spot, capture date and satellite source. Pan or zoom the map and the list follows; sort by latest or oldest, or switch to the sanctioned vessels tab.",
+    title: "Detections",
+    body: "Every STS detection in the current map view is listed here, with its hot spot, capture date and satellite source. Pan or zoom the map and the list follows; sort by latest or oldest, or switch to the sanctioned vessels tab.",
     target: "reel",
-    next: "Pick a card",
+    next: "Select a detection",
   },
   {
     id: "details",
     title: "Capture details",
-    body: "Choosing a card opens its capture: the satellite image of the pair, the capture time, and for each vessel its name, registration and flag, with a Sanctioned badge when it is listed.",
+    body: "Selecting a detection opens its capture: the satellite image of the pair, the capture time, and for each vessel its name, registration and flag, with a Sanctioned badge when it is listed.",
     target: "details",
   },
   {
     id: "pair",
     title: "Selected STS",
-    body: "The same detection is ringed in cyan on the map, and the map flew to it. Each icon is two vessels side by side: yellow when neither is sanctioned, red when at least one is. Hover any icon for a quick look, or click it to open its card.",
+    body: "The same detection is ringed in cyan on the map, and the map flew to it. Each icon is two vessels side by side: yellow when neither is sanctioned, red when at least one is. Hover any icon for a quick look, or click it to select that detection.",
     target: "pair",
     next: "Sanctioned vessels",
   },
@@ -71,17 +72,17 @@ const STEPS: Step[] = [
   {
     id: "vessels",
     title: "A sanctioned vessel",
-    body: "Each card is one vessel, with its hot spot, capture date and satellite source. This one was seen more than once: the badge on its card (×N) is the number of positions in the time range.",
-    altBody: "Each card is one vessel, with its hot spot, capture date and satellite source. Here no vessel has more than one position in the time range, so there is no track to follow.",
+    body: "Each entry is one vessel, with its hot spot, capture date and satellite source. This one was seen more than once: the ×N badge is the number of positions recorded for it in the time range.",
+    altBody: "Each entry is one vessel, with its hot spot, capture date and satellite source. Here no vessel has more than one position in the time range, so there is no track to follow.",
     target: "card",
-    next: "Previous positions",
+    next: "Show previous positions",
   },
   {
     id: "positions",
     title: "Previous positions",
-    body: "The other positions of this vessel are listed under its card, newest first, each with its hot spot, date and satellite. Clicking one opens the capture from that moment.",
+    body: "The other positions of this vessel are listed under it, newest first, each with its hot spot, date and satellite. Selecting one opens the capture from that moment.",
     target: "history",
-    next: "Pick one",
+    next: "Select a position",
   },
   {
     id: "track",
@@ -92,7 +93,7 @@ const STEPS: Step[] = [
   {
     id: "filters",
     title: "Filters",
-    body: "Time range keeps only the detections captured between the two dates, and Source chooses the satellites: Sentinel-1 (radar) and Sentinel-2 (optical). The map and the cards update together.",
+    body: "Time range keeps only the detections captured between the two dates, and Source chooses the satellites: Sentinel-1 (radar) and Sentinel-2 (optical). The map and the list update together.",
     target: "filters",
   },
 ];
@@ -126,7 +127,7 @@ function featureRect(map: MapHandle, feature: HotSpotFeature): Rect | null {
 }
 
 interface Props {
-  map: RefObject<MapHandle | null>;
+  map: () => MapHandle | undefined;
   hotSpots: HotSpotCollection;
   entries: Entry[];
   history: Entry[];
@@ -136,141 +137,153 @@ interface Props {
   onPick: (entry: Entry) => void;
 }
 
-export default function Tour({ map, hotSpots, entries, history, points, onSelect, onTab, onPick }: Props) {
-  const [index, setIndex] = useState(-1);
-  const [busy, setBusy] = useState(false);
-  const [rects, setRects] = useState<Rect[]>([]);
-  const [area, setArea] = useState<Rect>({ left: 0, top: 0, right: 0, bottom: 0 });
-  const [pos, setPos] = useState<Point | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const entriesRef = useRef(entries);
-  entriesRef.current = entries;
-  const historyRef = useRef(history);
-  historyRef.current = history;
-  const pointsRef = useRef(points);
-  pointsRef.current = points;
-  const picked = useRef<Entry | null>(null);
-  const [multi, setMulti] = useState(false);
-  const spot = hotSpots.features.find((f) => f.properties.name === TOUR_HOT_SPOT) ?? null;
+export default function Tour(props: Props) {
+  const [index, setIndex] = createSignal(-1);
+  const [busy, setBusy] = createSignal(false);
+  const [rects, setRects] = createSignal<Rect[]>([]);
+  const [area, setArea] = createSignal<Rect>({ left: 0, top: 0, right: 0, bottom: 0 });
+  const [pos, setPos] = createSignal<Point | null>(null);
+  const [size, setSize] = createSignal(viewport());
+  const [multi, setMulti] = createSignal(false);
+  let cardEl: HTMLDivElement | undefined;
+  let picked: Entry | null = null;
+  const spot = createMemo(() => props.hotSpots.features.find((f) => f.properties.name === TOUR_HOT_SPOT) ?? null);
+  const step = createMemo(() => (index() >= 0 ? STEPS[index()] : null));
 
-  const step = index >= 0 ? STEPS[index] : null;
-
-  useEffect(() => {
+  onSettled(() => {
     let cancelled = false;
     (async () => {
-      await map.current?.whenSettled();
+      await props.map()?.whenSettled();
       await sleep(START_DELAY_MS);
       if (!cancelled) setIndex(0);
     })();
     return () => {
       cancelled = true;
     };
-  }, [map]);
+  });
 
-  const measure = useCallback(() => {
-    const handle = map.current;
-    if (!step) return;
+  const measure = () => {
+    const handle = props.map();
+    const current = step();
+    if (!current) return;
     const screen = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
     const mapBox = domRect("map") ?? screen;
     let next: Rect[] = [];
-    if (step.target === "spots" && handle) next = hotSpots.features.map((f) => featureRect(handle, f)).filter((r): r is Rect => r !== null);
-    else if (step.target === "pair" && handle && picked.current) {
-      const at = handle.project([picked.current.lon, picked.current.lat]);
+    if (current.target === "spots" && handle) next = props.hotSpots.features.map((f) => featureRect(handle, f)).filter((r): r is Rect => r !== null);
+    else if (current.target === "pair" && handle && picked) {
+      const at = handle.project([picked.lon, picked.lat]);
       if (at) next = [minSide(padRect({ left: at.x, top: at.y, right: at.x, bottom: at.y }, HIGHLIGHT_PAD_PX, viewport()), MIN_HIGHLIGHT_PX)];
-    } else if (step.target === "track" && handle) {
-      const projected = pointsRef.current.map((p) => handle.project([p.lon, p.lat])).filter((p): p is Point => p !== null);
+    } else if (current.target === "track" && handle) {
+      const projected = props.points.map((p) => handle.project([p.lon, p.lat])).filter((p): p is Point => p !== null);
       const box = rectOfPoints(projected);
       if (box) next = [minSide(padRect(box, HIGHLIGHT_PAD_PX, viewport()), MIN_HIGHLIGHT_PX)];
-    } else if (step.target !== "none") {
-      const found = domRect(step.target);
+    } else if (current.target !== "none") {
+      const found = domRect(current.target);
       if (found) next = [padRect(found, -PANEL_INSET_PX, viewport())];
     }
+    setSize(viewport());
     setRects(next);
-    setArea(["spots", "pair", "track"].includes(step.target) ? mapBox : screen);
-  }, [map, step, hotSpots]);
+    setArea(["spots", "pair", "track"].includes(current.target) ? mapBox : screen);
+  };
 
-  useEffect(() => {
-    if (busy || !step) return undefined;
-    const frame = requestAnimationFrame(measure);
-    window.addEventListener("resize", measure);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", measure);
-    };
-  }, [measure, busy, step]);
+  createEffect(
+    () => [busy(), step()] as const,
+    ([working, current]) => {
+      if (working || !current) return undefined;
+      const frame = requestAnimationFrame(measure);
+      window.addEventListener("resize", measure);
+      return () => {
+        cancelAnimationFrame(frame);
+        window.removeEventListener("resize", measure);
+      };
+    },
+  );
 
-  useLayoutEffect(() => {
-    if (!cardRef.current || !step) return;
-    const { width, height } = cardRef.current.getBoundingClientRect();
-    setPos(placeCard(rects, { width, height }, area));
-  }, [rects, area, step]);
+  createEffect(
+    () => [rects(), area(), step()] as const,
+    ([nextRects, nextArea, current]) => {
+      if (!cardEl || !current) return;
+      const { width, height } = cardEl.getBoundingClientRect();
+      setPos(placeCard(nextRects, { width, height }, nextArea));
+    },
+  );
 
-  const finish = useCallback(() => setIndex(-1), []);
+  const finish = () => {
+    setIndex(-1);
+    props.onTab("pairs");
+    const bounds = featureBounds(props.hotSpots);
+    const handle = props.map();
+    if (handle && bounds) void handle.fitBounds(bounds, RESET_PADDING_PX, START_MAX_ZOOM);
+  };
 
-  const waitFor = useCallback(async (ready: () => boolean, limit: number) => {
+  const waitFor = async (ready: () => boolean, limit: number) => {
     for (let waited = 0; waited < limit && !ready(); waited += POLL_MS) await sleep(POLL_MS);
     return ready();
-  }, []);
+  };
 
-  const waitForEntries = useCallback(() => waitFor(() => entriesRef.current.length > 0, ENTRIES_WAIT_MS), [waitFor]);
+  const waitForEntries = () => waitFor(() => props.entries.length > 0, ENTRIES_WAIT_MS);
 
-  const next = useCallback(async () => {
-    if (!step || busy) return;
-    const handle = map.current;
+  const next = async () => {
+    const current = step();
+    if (!current || busy()) return;
+    const at = index();
+    const repeatedKnown = multi();
+    const handle = props.map();
     const filtersAt = STEPS.findIndex((s) => s.id === "filters");
     setBusy(true);
     setPos(null);
     try {
-      if (step.id === "spots" && handle && spot) {
-        const bounds = featureBounds({ type: "FeatureCollection", features: [spot] });
+      const focus = spot();
+      if (current.id === "spots" && handle && focus) {
+        const bounds = featureBounds({ type: "FeatureCollection", features: [focus] });
         if (bounds) await handle.fitBounds(bounds, FIT_PADDING_PX);
         await handle.whenSettled();
-        setIndex((await waitForEntries()) ? index + 1 : filtersAt);
-      } else if (step.id === "spots") setIndex(filtersAt);
-      else if (step.id === "reel") {
-        const all = entriesRef.current;
+        setIndex((await waitForEntries()) ? at + 1 : filtersAt);
+      } else if (current.id === "spots") setIndex(filtersAt);
+      else if (current.id === "reel") {
+        const all = props.entries;
         const local = all.filter((e) => e.hotSpot === TOUR_HOT_SPOT);
         const list = local.length > 0 ? local : all;
         const entry = list[Math.floor(list.length / 2)];
         if (!entry) setIndex(filtersAt);
         else {
-          picked.current = entry;
-          onSelect(entry);
+          picked = entry;
+          props.onSelect(entry);
           await sleep(POLL_MS);
           await handle?.whenSettled();
-          setIndex(index + 1);
+          setIndex(at + 1);
         }
-      } else if (step.id === "pair") {
-        const bounds = spot ? featureBounds({ type: "FeatureCollection", features: [spot] }) : null;
-        picked.current = null;
-        onTab("sanctioned");
+      } else if (current.id === "pair") {
+        const bounds = focus ? featureBounds({ type: "FeatureCollection", features: [focus] }) : null;
+        picked = null;
+        props.onTab("sanctioned");
         if (handle && bounds) await handle.fitBounds(bounds, FIT_PADDING_PX);
         await handle?.whenSettled();
-        const isVessel = () => entriesRef.current.some((e) => e.tab === "sanctioned");
+        const isVessel = () => props.entries.some((e) => e.tab === "sanctioned");
         if (!(await waitFor(isVessel, ENTRIES_WAIT_MS))) setIndex(filtersAt);
-        else setIndex(index + 1);
-      } else if (step.id === "sanctioned") {
-        const vessels = entriesRef.current.filter((e) => e.tab === "sanctioned");
+        else setIndex(at + 1);
+      } else if (current.id === "sanctioned") {
+        const vessels = props.entries.filter((e) => e.tab === "sanctioned");
         const local = vessels.filter((e) => e.hotSpot === TOUR_HOT_SPOT);
         const pool = local.length > 0 ? local : vessels;
         const repeated = pool.find((e) => (e.detections ?? 1) > 1);
         const entry = repeated ?? pool[0];
         if (!entry) setIndex(filtersAt);
         else {
-          onSelect(entry);
+          props.onSelect(entry);
           await sleep(POLL_MS);
           await handle?.whenSettled();
-          setMulti(Boolean(repeated) && (await waitFor(() => historyRef.current.length > 0, HISTORY_WAIT_MS)));
-          setIndex(index + 1);
+          setMulti(Boolean(repeated) && (await waitFor(() => props.history.length > 0, HISTORY_WAIT_MS)));
+          setIndex(at + 1);
         }
-      } else if (step.id === "vessels" && !multi) setIndex(filtersAt);
-      else if (step.id === "positions") {
-        const previous = historyRef.current[0];
+      } else if (current.id === "vessels" && !repeatedKnown) setIndex(filtersAt);
+      else if (current.id === "positions") {
+        const previous = props.history[0];
         if (previous) {
-          onPick(previous);
+          props.onPick(previous);
           await sleep(POLL_MS);
           await handle?.whenSettled();
-          const all = pointsRef.current.map((p) => ({ lon: p.lon, lat: p.lat }));
+          const all = props.points.map((p) => ({ lon: p.lon, lat: p.lat }));
           const lons = all.map((p) => p.lon);
           const lats = all.map((p) => p.lat);
           if (handle && all.length > 1) {
@@ -279,64 +292,65 @@ export default function Tour({ map, hotSpots, entries, history, points, onSelect
             await handle.whenSettled();
           }
         }
-        setIndex(index + 1);
-      } else if (step.id === "filters") finish();
-      else setIndex(index + 1);
+        setIndex(at + 1);
+      } else if (current.id === "filters") finish();
+      else setIndex(at + 1);
     } finally {
       setBusy(false);
     }
-  }, [step, busy, map, spot, index, multi, waitFor, waitForEntries, onSelect, onTab, onPick, finish]);
+  };
 
-  useEffect(() => {
-    if (!step) return undefined;
-    const onKey = (e: KeyboardEvent) => {
-      if (busy) return;
-      if (e.key === "Escape") finish();
-      else if (e.key === "Enter" || e.key === "ArrowRight") void next();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step, busy, next, finish]);
-
-  if (!step) return null;
-  const { width, height } = viewport();
-  const last = index === STEPS.length - 1;
+  createEffect(
+    () => [step(), busy()] as const,
+    ([current, working]) => {
+      if (!current) return undefined;
+      const onKey = (e: KeyboardEvent) => {
+        if (working) return;
+        if (e.key === "Escape") finish();
+        else if (e.key === "Enter" || e.key === "ArrowRight") void next();
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    },
+  );
 
   return (
-    <div className="tour" role="dialog" aria-label="Guided tour">
-      {!busy && (
-        <svg className="tour-shade" width={width} height={height} aria-hidden="true">
-          <defs>
-            <mask id="tour-mask">
-              <rect width={width} height={height} fill="white" />
-              {rects.map((r) => (
-                <rect key={`${r.left}-${r.top}`} x={r.left} y={r.top} width={r.right - r.left} height={r.bottom - r.top} rx={HIGHLIGHT_RADIUS_PX} fill="black" />
-              ))}
-            </mask>
-          </defs>
-          <rect width={width} height={height} className="tour-dim" mask="url(#tour-mask)" />
-          {rects.map((r) => (
-            <rect key={`o-${r.left}-${r.top}`} className="tour-outline" x={r.left} y={r.top} width={r.right - r.left} height={r.bottom - r.top} rx={HIGHLIGHT_RADIUS_PX} />
-          ))}
-        </svg>
-      )}
-      {!busy && (
-        <div ref={cardRef} className="tour-card" style={{ left: pos?.x ?? 0, top: pos?.y ?? 0, visibility: pos ? "visible" : "hidden" }}>
-          <div className="tour-count">
-            {index + 1} / {STEPS.length}
-          </div>
-          <h2 className="tour-title">{step.title}</h2>
-          <p className="tour-body">{!multi && step.altBody ? step.altBody : step.body}</p>
-          <div className="tour-actions">
-            <button type="button" className="tour-button" onClick={finish}>
-              Skip
-            </button>
-            <button type="button" className="tour-button tour-button-primary" onClick={() => void next()}>
-              {last ? "Finish" : (step.next ?? "Next")}
-            </button>
-          </div>
+    <Show when={step()}>
+      {(current) => (
+        <div class="tour" role="dialog" aria-label="Guided tour">
+          <Show when={!busy()}>
+            <svg class="tour-shade" width={size().width} height={size().height} aria-hidden="true">
+              <defs>
+                <mask id="tour-mask">
+                  <rect width={size().width} height={size().height} fill="white" />
+                  <For each={rects()} keyed={(r) => `${r.left}-${r.top}`}>
+                    {(r) => <rect x={r().left} y={r().top} width={r().right - r().left} height={r().bottom - r().top} rx={HIGHLIGHT_RADIUS_PX} fill="black" />}
+                  </For>
+                </mask>
+              </defs>
+              <rect width={size().width} height={size().height} class="tour-dim" mask="url(#tour-mask)" />
+              <For each={rects()} keyed={(r) => `${r.left}-${r.top}`}>
+                {(r) => <rect class="tour-outline" x={r().left} y={r().top} width={r().right - r().left} height={r().bottom - r().top} rx={HIGHLIGHT_RADIUS_PX} />}
+              </For>
+            </svg>
+            <div ref={(el) => (cardEl = el)} class="tour-card" style={{ left: `${pos()?.x ?? 0}px`, top: `${pos()?.y ?? 0}px`, visibility: pos() ? "visible" : "hidden" }}>
+              <div class="tour-count">
+                {index() + 1} / {STEPS.length}
+              </div>
+              <h2 class="tour-title">{current().title}</h2>
+              <p class="tour-body">{!multi() && current().altBody ? current().altBody : current().body}</p>
+              <div class="tour-actions">
+                <button type="button" class="tour-button" onClick={finish}>
+                  Skip
+                </button>
+                <button type="button" class="tour-button tour-button-primary" onClick={() => void next()}>
+                  {index() === STEPS.length - 1 ? "Finish" : (current().next ?? "Next")}
+                </button>
+              </div>
+            </div>
+          </Show>
         </div>
       )}
-    </div>
+    </Show>
   );
 }
