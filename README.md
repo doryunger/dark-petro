@@ -102,9 +102,9 @@ sanctions list is recorded as a sanctioned vessel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.svg">
-  <img alt="The control host sends jobs to the prep worker and the GPU worker; they exchange prepared imagery and findings through storage, and findings return to the control host" src="docs/img/architecture-light.svg">
+  <img alt="The control host sends jobs to the prep worker and the GPU worker. The prep worker writes prepared imagery to shared cloud storage, the GPU worker reads it and writes findings there, and the control host reads the findings from it" src="docs/img/architecture-light.svg">
 </picture>
 
-The control host starts the two workers only when there are jobs.
+The control host starts the two workers only when there are jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own disks only as scratch space.
 
 More: [docs/development.md](docs/development.md) to run and deploy the viewer, [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and [frontend/context/frontend.md](frontend/context/frontend.md) for design notes, [AGENTS.md](AGENTS.md) for working rules.

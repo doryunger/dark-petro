@@ -1,11 +1,13 @@
 flowchart LR
-    CH["<b>Control host</b> (always on)<br/>AIS collection and archive<br/>job manager<br/>review app and web app"]
-    PW["<b>Prep worker</b> (on demand)<br/>prepares the imagery"]
-    GW["<b>GPU worker</b> (on demand)<br/>detects, adds AIS, publishes"]
-    ST[("<b>Storage</b><br/>findings and images")]
+    CH["<b>Control host</b> (always on)<br/>AIS archive<br/>job queue<br/>review app and web app"]
+    PW["<b>Prep worker</b> (on demand)<br/>prepares the imagery<br/>scratch disk only"]
+    GW["<b>GPU worker</b> (on demand)<br/>detects, adds AIS, publishes<br/>scratch disk only"]
+    subgraph C["Shared cloud storage (S3)<br/>outside every machine"]
+        ST[("Prepared imagery<br/>Findings and captures<br/>Hot-spot list")]
+    end
     CH -->|jobs| PW
     CH -->|jobs| GW
-    PW -->|prepared imagery| ST
-    ST --> GW
-    GW -->|findings| ST
-    ST -->|findings| CH
+    PW -->|writes prepared imagery| ST
+    ST -->|reads prepared imagery| GW
+    GW -->|writes findings| ST
+    ST -->|reads findings| CH
