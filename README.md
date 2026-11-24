@@ -32,10 +32,11 @@ newest sighting; the panel lists every sighting and links to any suspicious acti
 
 ### Why these hot spots
 
-Findings are limited to a fixed set of **hot spots**: open-water areas where STS transfers are known to happen. We chose them
-from open-source reporting (OSINT), articles about the phenomenon in each area, linked below, and checked them by scanning
-other candidate areas with the same detectors so that the activity is really concentrated in these places. We can only
-detect what Sentinel-1 and Sentinel-2 cover.
+Findings are limited to a fixed set of **hot spots**: open-water areas where STS transfers are known to happen. We chose four
+of them from open-source reporting (OSINT), articles about the phenomenon in each area, linked below, and checked them by
+scanning other candidate areas with the same detectors so that the activity is really concentrated in these places. The
+fifth, Sikka, came out of that scan itself, as described under the table. We can only detect what Sentinel-1 and Sentinel-2
+cover.
 
 | Hot spot | Area | Article |
 |---|---|---|
@@ -43,7 +44,19 @@ detect what Sentinel-1 and Sentinel-2 cover.
 | **Sohar** | Off Sohar, Gulf of Oman | [Eye in the sky: European satellite catches 19 shadow energy transfers off Oman coast in one day](https://gulfnews.com/business/energy/eye-in-the-sky-european-satellite-catches-19-shadow-energy-transfers-off-oman-coast-in-one-day-1.500698428) |
 | **EOPL** | East of Singapore Strait (EOPL) | [In the waters off Malaysia, Iranian oil sales continue despite blockade](https://aljazeera.com/news/2026/7/30/in-the-waters-off-malaysia-iranian-oil-sales-continue-despite-blockade) |
 | **Johor** | East of Johor, South China Sea | [MMEA special action team conducts forced boarding by helicopter of two errant vessels in eastern Johor waters](https://www.malaymail.com/news/malaysia/2023/10/24/mmea-special-action-team-conducts-forced-boarding-by-helicopter-of-two-errant-vessels-in-eastern-johor-waters/98134) |
-| **Sikka** | Gulf of Kutch, off Sikka and Vadinar | [Tanker congestion shunts vital oil transfers farther from Hormuz](https://gcaptain.com/tanker-congestion-shunts-vital-oil-transfers-farther-from-hormuz/) |
+| **Sikka** | Gulf of Kutch, off Sikka and Vadinar | Found by our own scan, see [below](#sikka-how-we-found-a-new-hot-spot) |
+
+### Sikka: how we found a new hot spot
+
+To look for new hot spots we scan the open sea between the known ones with the same detectors. The sea is cut into squares
+about the size of one satellite scene, squares are drawn at random and scanned on two dates, and the squares around any
+confirmed pair are scanned too, to see whether the activity continues. A new area qualifies when its confirmed pairs per
+scanned scene are in line with the existing hot spots.
+
+![Scan of the sea between the hot spots](docs/img/hotspot-scan.png)
+
+The red outlines are the existing hot spots. The two green squares, in the Gulf of Kutch off India's west coast, are Sikka
+and Vadinar: the only places where the scan confirmed pairs. They became the fifth hot spot in November 2026.
 
 ### How we detect STS activity
 
@@ -110,15 +123,3 @@ sanctions list is recorded as a sanctioned vessel.
 The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are
 jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own
 disks only as scratch space.
-
-## Credits
-
-Contains modified Copernicus Sentinel data (Sentinel-1 and Sentinel-2). Ships are found with the open, pre-trained detectors
-of the Allen Institute for AI (Ai2).
-
-## More
-
-- [docs/development.md](docs/development.md): run and deploy the viewer.
-- Design notes: [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and
-  [frontend/context/frontend.md](frontend/context/frontend.md).
-- [AGENTS.md](AGENTS.md): working rules.
