@@ -89,15 +89,14 @@ sanctions list is recorded as a sanctioned vessel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
-  <img alt="Watch for new satellite passes, prepare the imagery, detect ships and STS activity, add AIS and sanctions, review, web app" src="docs/img/pipeline-light.svg">
+  <img alt="Watch for new satellite passes, prepare the imagery, detect ships and STS activity, add AIS and sanctions, publish the data for viewing" src="docs/img/pipeline-light.svg">
 </picture>
 
 1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
    job.
 2. **Process.** The imagery is prepared, ships are detected and STS activity is found, as described above.
 3. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
-4. **Review.** The findings are saved, and analysts confirm or reject them. Rejected ones never reach the app.
-5. **Show.** The web app rebuilds its public copy whenever findings change.
+4. **Publish.** The findings are saved and prepared for viewing, and the web app rebuilds its public copy whenever they change.
 
 ### On the actual architecture
 
