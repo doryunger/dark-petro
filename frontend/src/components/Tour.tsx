@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, For, onSettled, Show } from "solid-js";
-import { TOUR_HOT_SPOT } from "../lib/constants";
+import { START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
 import { featureBounds } from "../lib/geo";
 import { minSide, padRect, placeCard, rectOfPoints, type Point, type Rect, type Size } from "../lib/tour";
 import type { Bounds, Entry, HotSpotCollection, HotSpotFeature, Tab, TrackPoint } from "../lib/types";
@@ -15,6 +15,7 @@ const HIGHLIGHT_RADIUS_PX = 4;
 const FIT_PADDING_PX = 150;
 const TRACK_MAX_ZOOM = 12;
 const HISTORY_WAIT_MS = 5000;
+const RESET_PADDING_PX = 48;
 
 type Target = "none" | "spots" | "reel" | "details" | "pair" | "tabs" | "card" | "history" | "track" | "filters";
 
@@ -43,21 +44,21 @@ const STEPS: Step[] = [
   },
   {
     id: "reel",
-    title: "Cards",
-    body: "Every detection in the current map view is a card, with its hot spot, capture date and satellite source. Pan or zoom the map and the list follows; sort by latest or oldest, or switch to the sanctioned vessels tab.",
+    title: "Detections",
+    body: "Every STS detection in the current map view is listed here, with its hot spot, capture date and satellite source. Pan or zoom the map and the list follows; sort by latest or oldest, or switch to the sanctioned vessels tab.",
     target: "reel",
-    next: "Pick a card",
+    next: "Select a detection",
   },
   {
     id: "details",
     title: "Capture details",
-    body: "Choosing a card opens its capture: the satellite image of the pair, the capture time, and for each vessel its name, registration and flag, with a Sanctioned badge when it is listed.",
+    body: "Selecting a detection opens its capture: the satellite image of the pair, the capture time, and for each vessel its name, registration and flag, with a Sanctioned badge when it is listed.",
     target: "details",
   },
   {
     id: "pair",
     title: "Selected STS",
-    body: "The same detection is ringed in cyan on the map, and the map flew to it. Each icon is two vessels side by side: yellow when neither is sanctioned, red when at least one is. Hover any icon for a quick look, or click it to open its card.",
+    body: "The same detection is ringed in cyan on the map, and the map flew to it. Each icon is two vessels side by side: yellow when neither is sanctioned, red when at least one is. Hover any icon for a quick look, or click it to select that detection.",
     target: "pair",
     next: "Sanctioned vessels",
   },
@@ -71,17 +72,17 @@ const STEPS: Step[] = [
   {
     id: "vessels",
     title: "A sanctioned vessel",
-    body: "Each card is one vessel, with its hot spot, capture date and satellite source. This one was seen more than once: the badge on its card (×N) is the number of positions in the time range.",
-    altBody: "Each card is one vessel, with its hot spot, capture date and satellite source. Here no vessel has more than one position in the time range, so there is no track to follow.",
+    body: "Each entry is one vessel, with its hot spot, capture date and satellite source. This one was seen more than once: the ×N badge is the number of positions recorded for it in the time range.",
+    altBody: "Each entry is one vessel, with its hot spot, capture date and satellite source. Here no vessel has more than one position in the time range, so there is no track to follow.",
     target: "card",
-    next: "Previous positions",
+    next: "Show previous positions",
   },
   {
     id: "positions",
     title: "Previous positions",
-    body: "The other positions of this vessel are listed under its card, newest first, each with its hot spot, date and satellite. Clicking one opens the capture from that moment.",
+    body: "The other positions of this vessel are listed under it, newest first, each with its hot spot, date and satellite. Selecting one opens the capture from that moment.",
     target: "history",
-    next: "Pick one",
+    next: "Select a position",
   },
   {
     id: "track",
@@ -92,7 +93,7 @@ const STEPS: Step[] = [
   {
     id: "filters",
     title: "Filters",
-    body: "Time range keeps only the detections captured between the two dates, and Source chooses the satellites: Sentinel-1 (radar) and Sentinel-2 (optical). The map and the cards update together.",
+    body: "Time range keeps only the detections captured between the two dates, and Source chooses the satellites: Sentinel-1 (radar) and Sentinel-2 (optical). The map and the list update together.",
     target: "filters",
   },
 ];
@@ -207,7 +208,13 @@ export default function Tour(props: Props) {
     },
   );
 
-  const finish = () => setIndex(-1);
+  const finish = () => {
+    setIndex(-1);
+    props.onTab("pairs");
+    const bounds = featureBounds(props.hotSpots);
+    const handle = props.map();
+    if (handle && bounds) void handle.fitBounds(bounds, RESET_PADDING_PX, START_MAX_ZOOM);
+  };
 
   const waitFor = async (ready: () => boolean, limit: number) => {
     for (let waited = 0; waited < limit && !ready(); waited += POLL_MS) await sleep(POLL_MS);
