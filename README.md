@@ -3,14 +3,14 @@
 A public, read-only map of **suspected ship-to-ship (STS) oil transfers** found in free satellite imagery, and of
 **sanctioned vessels** caught on camera at the same places. This repository is the overview of the whole process, from a
 new satellite pass to a dot on the map, and it holds the part the public sees: the data build, the tile service and the web
-app.
+viewer.
 
 ## What is Dark Petro
 
 The aim is to track illegal activity that could involve sanctioned vessels. Ship-to-ship (STS) transfer, where two vessels
 stop alongside each other at sea and move cargo across, is a questionable practice that helps countries get around sanctions
-and other economic restrictions. STS is not the problem in itself; it is a hint that something foul may be taking place, and
-we assume that vessels taking part in it are more likely to be sanctioned ones. The app has two tabs.
+and other economic restrictions. STS is not the problem in itself; it is a hint that something suspicious may be taking
+place, and we assume that vessels taking part in it are more likely to be sanctioned ones. The viewer has two tabs.
 
 ### Suspicious activity
 
@@ -85,7 +85,7 @@ sanctions list is recorded as a sanctioned vessel.
 
 ## The architecture
 
-### The pipeline
+### The logical pipeline
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/pipeline-dark.svg">
@@ -94,17 +94,31 @@ sanctions list is recorded as a sanctioned vessel.
 
 1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
    job.
-2. **Process.** The satellite scenes are downloaded and cut into tiles, then ships are detected and STS activity is found, as described above.
-3. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
-4. **Publish.** The findings are saved and prepared for viewing, and the web viewer rebuilds its public copy whenever they change.
+2. **Download and tile.** The satellite scene is downloaded and cut into small image tiles that the detector can read.
+3. **Detect.** Ships are found and each one is checked for a second hull alongside it, as described above.
+4. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
+5. **Publish.** The findings are saved and prepared for viewing, and the web viewer rebuilds the data it shows whenever they
+   change.
 
-### On the actual architecture
+### Infrastructure components
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-overview-dark.svg">
   <img alt="In three columns: the control host on a remote machine, the shared cloud storage (S3) in the middle, and the on-demand workers on the right. The control host sends a job to the prep worker, which writes the tiled scenes to storage and hands over to the GPU worker. The GPU worker reads the tiled scenes and writes findings to storage, and the control host reads the findings from there" src="docs/img/architecture-overview-light.svg">
 </picture>
 
-The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own disks only as scratch space.
+The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are
+jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own
+disks only as scratch space.
 
-More: [docs/development.md](docs/development.md) to run and deploy the viewer, [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and [frontend/context/frontend.md](frontend/context/frontend.md) for design notes, [AGENTS.md](AGENTS.md) for working rules.
+## Credits
+
+Contains modified Copernicus Sentinel data (Sentinel-1 and Sentinel-2). Ships are found with the open, pre-trained detectors
+of the Allen Institute for AI (Ai2).
+
+## More
+
+- [docs/development.md](docs/development.md): run and deploy the viewer.
+- Design notes: [pipeline/context/pipeline.md](pipeline/context/pipeline.md) and
+  [frontend/context/frontend.md](frontend/context/frontend.md).
+- [AGENTS.md](AGENTS.md): working rules.
