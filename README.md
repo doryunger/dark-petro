@@ -56,20 +56,11 @@ box (cyan in the images below).
 
 **One hull or two.** This is our own check, and it differs by sensor:
 
+- **Sentinel-1 (radar), geometry.** A metal hull is a bright return. We outline the bright area and look for two parallel
+  bright lines of ship length; two lines in a tanker-sized outline mean two hulls.
 - **Sentinel-2 (optical), spectral.** Each pixel is compared with the colour of the surrounding sea. The pixels that are not
   sea show the shape of the hulls, and if that shape is wider than one ship and has a second hull beside the first, it is
   STS activity.
-- **Sentinel-1 (radar), geometry.** A metal hull is a bright return. We outline the bright area and look for two parallel
-  bright lines of ship length; two lines in a tanker-sized outline mean two hulls.
-
-**Sentinel-2**
-
-![Sentinel-2 detection stages](docs/img/detection-s2.png)
-
-1. The detector draws one box, covering only one of the hulls.
-2. The spectral map shows everything that is not sea: one shape, wider than a single ship.
-3. A cross-section of that shape has two shoulders, hull A (the one in the box) and hull B beside it.
-4. Both hulls are outlined and the finding is suspicious activity.
 
 **Sentinel-1**
 
@@ -79,6 +70,15 @@ box (cyan in the images below).
 2. The outline of the whole return is much larger than the box.
 3. Two parallel bright lines fit the return: two hulls.
 4. The finding is suspicious activity, with a numbered marker on each hull.
+
+**Sentinel-2**
+
+![Sentinel-2 detection stages](docs/img/detection-s2.png)
+
+1. The detector draws one box, covering only one of the hulls.
+2. The spectral map shows everything that is not sea: one shape, wider than a single ship.
+3. A cross-section of that shape has two shoulders, hull A (the one in the box) and hull B beside it.
+4. Both hulls are outlined and the finding is suspicious activity.
 
 Each hull is then matched to the AIS archive, so it becomes a named vessel or a vessel with no AIS signal. A ship that is on a
 sanctions list is recorded as a sanctioned vessel.
