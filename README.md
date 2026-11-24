@@ -101,8 +101,8 @@ sanctions list is recorded as a sanctioned vessel.
 ### On the actual architecture
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.svg">
-  <img alt="In three columns: the control host on a remote machine, the shared cloud storage (S3) in the middle, and the on-demand workers on the right. The control host sends a job to the prep worker, which writes prepared imagery to storage and hands over to the GPU worker. The GPU worker reads the prepared imagery and writes findings to storage, and the control host reads the findings from there" src="docs/img/architecture-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-columns-dark.svg">
+  <img alt="In three columns: the control host on a remote machine, the shared cloud storage (S3) in the middle, and the on-demand workers on the right. The control host sends a job to the prep worker, which writes prepared imagery to storage and hands over to the GPU worker. The GPU worker reads the prepared imagery and writes findings to storage, and the control host reads the findings from there" src="docs/img/architecture-columns-light.svg">
 </picture>
 
 The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own disks only as scratch space.
