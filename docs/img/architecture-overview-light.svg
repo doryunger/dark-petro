@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="345" viewBox="0 0 980 345" role="img" aria-labelledby="t d">
+<title id="t">Architecture</title>
+<desc id="d">The control host, on a remote machine, sends a job to the prep worker. The prep worker writes tiled scenes to shared cloud storage (S3) and hands over to the GPU worker, which reads the tiled scenes from storage and writes findings back. The control host reads the findings from storage.</desc>
+<style>
+text { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+.bold { font-weight: 600; }
+.muted { fill: #57606a; font-size: 12px; }
+.panel { fill: #f6f8fa; stroke: #d0d7de; }
+.box { fill: #ffffff; stroke: #57606a; }
+.item { fill: #ddf4ff; stroke: #0969da; }
+.arrow { fill: none; stroke: #57606a; stroke-width: 1.5; marker-end: url(#h); }
+.title { font-weight: 600; font-size: 12px; fill: #57606a; }
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker></defs>
+
+<rect class="panel" x="20" y="70" width="200" height="260" rx="8"/>
+<text class="title" x="34" y="90">Remote machine</text>
+<rect class="panel" x="390" y="70" width="200" height="260" rx="8"/>
+<text class="title" x="490" y="90" text-anchor="middle">Shared cloud storage (S3)</text>
+<text class="muted" x="490" y="106" text-anchor="middle">reachable from every machine</text>
+<rect class="panel" x="770" y="70" width="190" height="260" rx="8"/>
+<text class="title" x="784" y="90">On-demand workers</text>
+
+<rect class="box" x="28" y="140" width="184" height="140" rx="6"/>
+<text x="120" y="179" text-anchor="middle" class="bold">Control host</text>
+<text x="120" y="196" text-anchor="middle" class="muted">(always on)</text>
+<text x="120" y="213" text-anchor="middle" class="">AIS archive</text>
+<text x="120" y="230" text-anchor="middle" class="">job queue</text>
+<text x="120" y="247" text-anchor="middle" class="">web viewer</text>
+
+<rect class="item" x="410" y="122" width="160" height="36" rx="6"/>
+<text x="490" y="145" text-anchor="middle">Tiled scenes</text>
+<rect class="item" x="410" y="187" width="160" height="36" rx="6"/>
+<text x="490" y="210" text-anchor="middle">Hot-spot list</text>
+<rect class="item" x="410" y="252" width="160" height="36" rx="6"/>
+<text x="490" y="275" text-anchor="middle">Findings and captures</text>
+
+<rect class="box" x="785" y="100" width="160" height="90" rx="6"/>
+<text x="865" y="122" text-anchor="middle" class="bold">Prep worker</text>
+<text x="865" y="139" text-anchor="middle" class="">downloads and tiles</text>
+<text x="865" y="156" text-anchor="middle" class="">the satellite scenes</text>
+<text x="865" y="173" text-anchor="middle" class="muted">scratch disk only</text>
+<rect class="box" x="785" y="222" width="160" height="94" rx="6"/>
+<text x="865" y="244" text-anchor="middle" class="bold">GPU worker</text>
+<text x="865" y="261" text-anchor="middle" class="">detects, adds AIS,</text>
+<text x="865" y="278" text-anchor="middle" class="">publishes</text>
+<text x="865" y="295" text-anchor="middle" class="muted">scratch disk only</text>
+
+<path class="arrow" d="M185,140 V40 H930 V100"/>
+<text x="560" y="33" text-anchor="middle">job</text>
+<path class="arrow" d="M785,140 H570"/>
+<text x="677" y="132" text-anchor="middle">tiled scenes</text>
+<path class="arrow" d="M865,190 V222"/>
+<text x="873" y="210">hands over</text>
+<path class="arrow" d="M570,155 H700 V245 H785"/>
+<text x="693" y="203" text-anchor="end">tiled scenes</text>
+<path class="arrow" d="M785,275 H570"/>
+<text x="677" y="267" text-anchor="middle">findings</text>
+<path class="arrow" d="M410,270 H212"/>
+<text x="305" y="262" text-anchor="middle">findings</text>
+</svg>
