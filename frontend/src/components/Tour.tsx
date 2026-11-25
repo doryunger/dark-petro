@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, For, onSettled, Show, untrack }
 import { DEFAULT_RANGE_DAYS, START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
 import { addDays, dayIndex } from "../lib/dates";
 import { featureBounds } from "../lib/geo";
+import { markTourSeen } from "../lib/tourSeen";
 import { minSide, padRect, placeCard, rectOfPoints, type Point, type Rect, type Size } from "../lib/tour";
 import type { Entry, Filter, HotSpotCollection, HotSpotFeature, Meta, Tab } from "../lib/types";
 import type { MapHandle } from "./MapView";
@@ -155,7 +156,6 @@ export default function Tour(props: Props) {
   const [size, setSize] = createSignal(viewport());
   let cardEl: HTMLDivElement | undefined;
   let picked: Entry | null = null;
-  let restored = false;
   const startFilter = untrack(() => props.filter);
   const spot = createMemo(() => props.hotSpots.features.find((f) => f.properties.name === TOUR_HOT_SPOT) ?? null);
   const step = createMemo(() => (index() >= 0 ? STEPS[index()] : null));
@@ -218,7 +218,6 @@ export default function Tour(props: Props) {
   );
 
   const resetView = async () => {
-    restored = true;
     props.onTab("pairs");
     const now = props.filter;
     if (now.from !== startFilter.from || now.to !== startFilter.to || now.sources.join() !== startFilter.sources.join()) props.onFilter(startFilter);
@@ -230,7 +229,7 @@ export default function Tour(props: Props) {
 
   const finish = () => {
     setIndex(-1);
-    if (!restored) void resetView();
+    markTourSeen();
   };
 
   const slideFrom = (from: string) =>
@@ -357,8 +356,7 @@ export default function Tour(props: Props) {
       if (!current) return undefined;
       const onKey = (e: KeyboardEvent) => {
         if (working) return;
-        if (e.key === "Escape") finish();
-        else if (e.key === "Enter" || e.key === "ArrowRight") void next();
+        if (e.key === "Enter" || e.key === "ArrowRight") void next();
       };
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
@@ -391,11 +389,6 @@ export default function Tour(props: Props) {
               <h2 class="tour-title">{read(current().title)}</h2>
               <p class="tour-body">{read(current().body)}</p>
               <div class="tour-actions">
-                <Show when={index() < STEPS.length - 1}>
-                  <button type="button" class="tour-button" onClick={finish}>
-                    Skip
-                  </button>
-                </Show>
                 <button type="button" class="tour-button tour-button-primary" onClick={() => void next()}>
                   {read(current().next ?? "Next")}
                 </button>

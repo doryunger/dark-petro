@@ -9,6 +9,7 @@ import Tour from "./components/Tour";
 import { fetchActivities, fetchActivityImos, fetchHotSpots, fetchMetadata, fetchSanctionedIndex, fetchTrack } from "./lib/api";
 import { addDays, defaultFilter, extendToToday, todayUtc } from "./lib/dates";
 import { entryTitle, pinFirst, setHotSpotLabels, sortEntries } from "./lib/entries";
+import { shouldStartTour } from "./lib/tourSeen";
 import { matches } from "./lib/filters";
 import { NO_HEADS, latestPerVessel } from "./lib/heads";
 import { historyOf, imoOf, trackEntry } from "./lib/groups";
@@ -36,6 +37,7 @@ interface TrackData {
 }
 
 const TOUR_ENABLED = import.meta.env.DEV || import.meta.env.VITE_TOUR === "1";
+const TOUR_WANTED = TOUR_ENABLED && shouldStartTour(window.location.search);
 
 const NO_HOT_SPOTS: HotSpotCollection = { type: "FeatureCollection", features: [] };
 
@@ -382,7 +384,7 @@ export default function App() {
         onOpenSanctionedVessel={openSanctionedVessel}
         onBack={goBack}
       />
-      <Show when={TOUR_ENABLED && hasView()}>
+      <Show when={TOUR_WANTED && hasView()}>
         <Tour map={() => mapHandle} filter={filter() as Filter} meta={meta()} onFilter={apply} onSlide={(span) => filtersHandle?.slide(span)} hotSpots={hotSpots() as HotSpotCollection} entries={viewEntries()} onSelect={(entry) => select(entry, true)} onTab={changeTab} />
       </Show>
       <Show when={hasView()} fallback={<main class="map" />}>

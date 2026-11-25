@@ -8,6 +8,8 @@ to AIS, the position signal that ships broadcast. The aim is to track illegal ac
 This repository covers the whole process, from a new satellite pass to an icon on the map: the data build, the tile service
 and the web viewer.
 
+**Live viewer: [darkpetro.stamsite.cc](https://darkpetro.stamsite.cc/)**
+
 ## Suspicious activity
 
 ![Suspicious activity tab](docs/img/tab-suspicious-activity.png)
@@ -33,14 +35,25 @@ A vessel appears once on the map, at its newest sighting. The panel shows the ca
 any suspicious activity it took part in. We find these vessels in the same satellite images: a single ship whose AIS signal
 identifies it as a sanctioned vessel is recorded as a sighting.
 
-## Applying geo-intelligence
+## Lighting the darkness
 
-### Why these hot spots
+Illicit ship-to-ship transfers often happen between dark vessels: ships that switch off their AIS transponder and vanish from
+tracking services. With no track to follow, one of the few ways left to find them is to look for the vessels themselves, using
+other methods.
 
-The viewer covers a fixed set of hot spots. We chose four of them from open-source reporting (OSINT), the news articles
-linked below, and checked them by scanning other areas with the same detectors, to make sure the activity is really
-concentrated in these places. The fifth, Sikka, came out of that scan itself, as described under the table. We can only detect
-what the Sentinel satellites cover.
+This section explains how we process satellite imagery and geo-intelligence data to light up that darkness and identify
+suspected STS activity.
+
+### Why we look at hot spots
+
+The open sea is far too big to search everywhere: every satellite image has to be downloaded, processed and checked. Transfers
+are not spread evenly, though. They gather in a few stretches of water, close to busy ports and shipping lanes, which we call
+hot spots. Looking only there finds far more for the same effort: in our first scan of random squares of sea, about 1 image in
+50 held a confirmed pair, while the images of the hot spots held between one and six.
+
+We chose four of the hot spots from open-source reporting (OSINT), the news articles linked below, and checked them by
+scanning other areas with the same detectors, to make sure the activity is really concentrated in these places. The fifth,
+Sikka, came out of that scan itself, as described under the table. We can only detect what the Sentinel satellites cover.
 
 | Hot spot | Area | Article |
 |---|---|---|

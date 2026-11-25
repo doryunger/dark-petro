@@ -1085,7 +1085,7 @@ body {
 
 .tour-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 0.875rem;
 }
 
