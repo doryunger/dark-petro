@@ -1,8 +1,9 @@
-import { createEffect, createMemo, createSignal, For, onSettled, Show } from "solid-js";
-import { START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
+import { createEffect, createMemo, createSignal, For, onSettled, Show, untrack } from "solid-js";
+import { DEFAULT_RANGE_DAYS, START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
+import { addDays, dayIndex } from "../lib/dates";
 import { featureBounds } from "../lib/geo";
 import { minSide, padRect, placeCard, rectOfPoints, type Point, type Rect, type Size } from "../lib/tour";
-import type { Bounds, Entry, HotSpotCollection, HotSpotFeature, Tab, TrackPoint } from "../lib/types";
+import type { Entry, Filter, HotSpotCollection, HotSpotFeature, Meta, Tab } from "../lib/types";
 import type { MapHandle } from "./MapView";
 
 const START_DELAY_MS = 600;
@@ -13,88 +14,95 @@ const MIN_HIGHLIGHT_PX = 56;
 const PANEL_INSET_PX = 1;
 const HIGHLIGHT_RADIUS_PX = 4;
 const FIT_PADDING_PX = 150;
-const TRACK_MAX_ZOOM = 12;
-const HISTORY_WAIT_MS = 5000;
 const RESET_PADDING_PX = 48;
+const WIDER_RANGE_DAYS = 30;
+const FIELD_PAD_PX = 6;
+const SLIDE_DELAY_MS = 700;
+const SLIDE_MS = 2000;
+const FIELD_TARGETS: Target[] = ["time-range", "sources"];
 
-type Target = "none" | "spots" | "reel" | "details" | "pair" | "tabs" | "card" | "history" | "track" | "filters";
+type Target = "none" | "spots" | "reel" | "details" | "pair" | "filters" | "time-range" | "sources";
+
+const MAP_TARGETS: Target[] = ["spots", "pair"];
+
+type Text = string | (() => string);
 
 interface Step {
   id: string;
-  title: string;
-  body: string;
-  altBody?: string;
-  target: Target;
-  next?: string;
+  title: Text;
+  body: Text;
+  target: Target | Target[];
+  next?: Text;
 }
+
+
+const read = (value: Text) => (typeof value === "function" ? value() : value);
 
 const STEPS: Step[] = [
   {
     id: "intro",
-    title: "What Dark Petro shows",
-    body: "Dark Petro looks for oil being moved from ship to ship at sea (STS transfers) in satellite imagery. Each finding is two vessels lying close together, and a vessel on a sanctions list is flagged in red. This short tour walks through the screen.",
+    title: "Welcome to Dark Petro",
+    body: "Dark Petro is a public map of suspected ship-to-ship (STS) oil transfers found in satellite imagery, and of sanctioned vessels seen at the same places. Two vessels meeting at sea to move cargo is a common way around sanctions.",
     target: "none",
   },
   {
     id: "spots",
     title: "Hot spots",
-    body: "The outlined areas are the hot spots, the stretches of sea where STS transfers are known to take place. Every STS detection is aggregated by the hot spot it falls in.",
+    body: "The outlined areas are hot spots, the stretches of sea where STS transfers are known to happen. Every detection belongs to one of them.",
     target: "spots",
     next: "Zoom in",
   },
   {
     id: "reel",
     title: "Detections",
-    body: "Every STS detection in the current map view is listed here, with its hot spot, capture date and satellite source. Pan or zoom the map and the list follows; sort by latest or oldest, or switch to the sanctioned vessels tab.",
+    body: "Every detection in the current map view is listed here, with its hot spot, capture date and satellite. The list follows the map; sort it newest or oldest first.",
     target: "reel",
     next: "Select a detection",
   },
   {
     id: "details",
-    title: "Capture details",
-    body: "Selecting a detection opens its capture: the satellite image of the pair, the capture time, and for each vessel its name, registration and flag, with a Sanctioned badge when it is listed.",
-    target: "details",
-  },
-  {
-    id: "pair",
-    title: "Selected STS",
-    body: "The same detection is ringed in cyan on the map, and the map flew to it. Each icon is two vessels side by side: yellow when neither is sanctioned, red when at least one is. Hover any icon for a quick look, or click it to select that detection.",
-    target: "pair",
-    next: "Sanctioned vessels",
+    title: "A selected detection",
+    body: "It shows its satellite capture, the time, and each vessel's name, flag and IMO number, with a Sanctioned badge when it is listed. On the map it is ringed in cyan: two vessels side by side, yellow, or red when one is sanctioned.",
+    target: ["details", "pair"],
   },
   {
     id: "sanctioned",
     title: "Sanctioned vessels",
-    body: "The second tab lists single vessels from the sanctions list instead of pairs. The map is zoomed out to the whole hot spot, so every sanctioned vessel detected there is in view.",
-    target: "tabs",
-    next: "Pick a vessel",
+    body: "This tab lists single vessels whose IMO number is on a sanctions list, such as the US (OFAC), EU and UK lists. Every time one is seen in a hot spot it is recorded, so its behaviour can be followed, including whether it takes part in suspicious activity.",
+    target: "reel",
+    next: "Select a vessel",
   },
   {
     id: "vessels",
     title: "A sanctioned vessel",
-    body: "Each entry is one vessel, with its hot spot, capture date and satellite source. This one was seen more than once: the ×N badge is the number of positions recorded for it in the time range.",
-    altBody: "Each entry is one vessel, with its hot spot, capture date and satellite source. Here no vessel has more than one position in the time range, so there is no track to follow.",
-    target: "card",
-    next: "Show previous positions",
-  },
-  {
-    id: "positions",
-    title: "Previous positions",
-    body: "The other positions of this vessel are listed under it, newest first, each with its hot spot, date and satellite. Selecting one opens the capture from that moment.",
-    target: "history",
-    next: "Select a position",
-  },
-  {
-    id: "track",
-    title: "The vessel's track",
-    body: "The map now shows where this vessel was seen. The cyan icon is its latest position, the grey one is the previous position just picked, any other previous positions are light red, and the line joins them in time order. Positions can lie well outside the hot spot.",
-    target: "track",
+    body: "Selecting a vessel opens its capture and every position recorded for it in the time range. On the map it is shown in cyan.",
+    target: ["details", "pair"],
   },
   {
     id: "filters",
     title: "Filters",
-    body: "Time range keeps only the detections captured between the two dates, and Source chooses the satellites: Sentinel-1 (radar) and Sentinel-2 (optical). The map and the list update together.",
+    body: "Filters narrow what the map and the list show, and both update together.",
     target: "filters",
+  },
+  {
+    id: "time-range",
+    title: "Time range",
+    body: `Time range keeps only the detections captured between the two dates, the last ${DEFAULT_RANGE_DAYS} days to begin with. Changing it reloads the map and the list.`,
+    target: "time-range",
+    next: "Change the time range",
+  },
+  {
+    id: "sources",
+    title: "Sources",
+    body: "Each detection comes from one of two satellites: Sentinel-1, a radar that sees through cloud and at night, or Sentinel-2, an optical camera that works in daylight.",
+    target: "sources",
+  },
+  {
+    id: "done",
+    title: "That is the tour",
+    body: "Select any detection or sanctioned vessel, or change the filters, to explore the map on your own.",
+    target: "none",
+    next: "Done",
   },
 ];
 
@@ -128,13 +136,14 @@ function featureRect(map: MapHandle, feature: HotSpotFeature): Rect | null {
 
 interface Props {
   map: () => MapHandle | undefined;
+  filter: Filter;
+  meta: Meta | null;
+  onFilter: (next: Filter) => void;
+  onSlide: (span: [number, number]) => void;
   hotSpots: HotSpotCollection;
   entries: Entry[];
-  history: Entry[];
-  points: TrackPoint[];
   onSelect: (entry: Entry) => void;
   onTab: (tab: Tab) => void;
-  onPick: (entry: Entry) => void;
 }
 
 export default function Tour(props: Props) {
@@ -144,9 +153,10 @@ export default function Tour(props: Props) {
   const [area, setArea] = createSignal<Rect>({ left: 0, top: 0, right: 0, bottom: 0 });
   const [pos, setPos] = createSignal<Point | null>(null);
   const [size, setSize] = createSignal(viewport());
-  const [multi, setMulti] = createSignal(false);
   let cardEl: HTMLDivElement | undefined;
   let picked: Entry | null = null;
+  let restored = false;
+  const startFilter = untrack(() => props.filter);
   const spot = createMemo(() => props.hotSpots.features.find((f) => f.properties.name === TOUR_HOT_SPOT) ?? null);
   const step = createMemo(() => (index() >= 0 ? STEPS[index()] : null));
 
@@ -168,22 +178,21 @@ export default function Tour(props: Props) {
     if (!current) return;
     const screen = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
     const mapBox = domRect("map") ?? screen;
-    let next: Rect[] = [];
-    if (current.target === "spots" && handle) next = props.hotSpots.features.map((f) => featureRect(handle, f)).filter((r): r is Rect => r !== null);
-    else if (current.target === "pair" && handle && picked) {
-      const at = handle.project([picked.lon, picked.lat]);
-      if (at) next = [minSide(padRect({ left: at.x, top: at.y, right: at.x, bottom: at.y }, HIGHLIGHT_PAD_PX, viewport()), MIN_HIGHLIGHT_PX)];
-    } else if (current.target === "track" && handle) {
-      const projected = props.points.map((p) => handle.project([p.lon, p.lat])).filter((p): p is Point => p !== null);
-      const box = rectOfPoints(projected);
-      if (box) next = [minSide(padRect(box, HIGHLIGHT_PAD_PX, viewport()), MIN_HIGHLIGHT_PX)];
-    } else if (current.target !== "none") {
-      const found = domRect(current.target);
-      if (found) next = [padRect(found, -PANEL_INSET_PX, viewport())];
+    const targets = Array.isArray(current.target) ? current.target : [current.target];
+    const next: Rect[] = [];
+    for (const target of targets) {
+      if (target === "spots" && handle) next.push(...props.hotSpots.features.map((f) => featureRect(handle, f)).filter((r): r is Rect => r !== null));
+      else if (target === "pair" && handle && picked) {
+        const at = handle.project([picked.lon, picked.lat]);
+        if (at) next.push(minSide(padRect({ left: at.x, top: at.y, right: at.x, bottom: at.y }, HIGHLIGHT_PAD_PX, viewport()), MIN_HIGHLIGHT_PX));
+      } else if (target !== "none") {
+        const found = domRect(target);
+        if (found) next.push(padRect(found, FIELD_TARGETS.includes(target) ? FIELD_PAD_PX : -PANEL_INSET_PX, viewport()));
+      }
     }
     setSize(viewport());
     setRects(next);
-    setArea(["spots", "pair", "track"].includes(current.target) ? mapBox : screen);
+    setArea(targets.every((t) => MAP_TARGETS.includes(t)) ? mapBox : screen);
   };
 
   createEffect(
@@ -208,12 +217,45 @@ export default function Tour(props: Props) {
     },
   );
 
-  const finish = () => {
-    setIndex(-1);
+  const resetView = async () => {
+    restored = true;
     props.onTab("pairs");
+    const now = props.filter;
+    if (now.from !== startFilter.from || now.to !== startFilter.to || now.sources.join() !== startFilter.sources.join()) props.onFilter(startFilter);
     const bounds = featureBounds(props.hotSpots);
     const handle = props.map();
-    if (handle && bounds) void handle.fitBounds(bounds, RESET_PADDING_PX, START_MAX_ZOOM);
+    if (handle && bounds) await handle.fitBounds(bounds, RESET_PADDING_PX, START_MAX_ZOOM);
+    await handle?.whenSettled();
+  };
+
+  const finish = () => {
+    setIndex(-1);
+    if (!restored) void resetView();
+  };
+
+  const slideFrom = (from: string) =>
+    new Promise<void>((resolve) => {
+      const first = dayIndex(props.filter.from);
+      const last = dayIndex(from);
+      const end = dayIndex(props.filter.to);
+      const began = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min((now - began) / SLIDE_MS, 1);
+        const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+        props.onSlide([Math.round(first + (last - first) * eased), end]);
+        if (t < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+
+  const widerFilter = (): Filter | null => {
+    const meta = props.meta;
+    if (!meta) return null;
+    const from = addDays(props.filter.to, 1 - WIDER_RANGE_DAYS);
+    let reach = from;
+    if (reach < meta.min_date) reach = meta.min_date;
+    return reach < props.filter.from ? { ...props.filter, from: reach } : null;
   };
 
   const waitFor = async (ready: () => boolean, limit: number) => {
@@ -223,11 +265,18 @@ export default function Tour(props: Props) {
 
   const waitForEntries = () => waitFor(() => props.entries.length > 0, ENTRIES_WAIT_MS);
 
+  const backToActivity = async (handle: MapHandle | undefined, focus: HotSpotFeature | null) => {
+    props.onTab("pairs");
+    const bounds = focus ? featureBounds({ type: "FeatureCollection", features: [focus] }) : null;
+    if (handle && bounds) await handle.fitBounds(bounds, FIT_PADDING_PX);
+    await handle?.whenSettled();
+    await waitFor(() => props.entries.some((e) => e.tab === "pairs"), ENTRIES_WAIT_MS);
+  };
+
   const next = async () => {
     const current = step();
     if (!current || busy()) return;
     const at = index();
-    const repeatedKnown = multi();
     const handle = props.map();
     const filtersAt = STEPS.findIndex((s) => s.id === "filters");
     setBusy(true);
@@ -253,47 +302,49 @@ export default function Tour(props: Props) {
           await handle?.whenSettled();
           setIndex(at + 1);
         }
-      } else if (current.id === "pair") {
+      } else if (current.id === "details") {
         const bounds = focus ? featureBounds({ type: "FeatureCollection", features: [focus] }) : null;
         picked = null;
         props.onTab("sanctioned");
         if (handle && bounds) await handle.fitBounds(bounds, FIT_PADDING_PX);
         await handle?.whenSettled();
         const isVessel = () => props.entries.some((e) => e.tab === "sanctioned");
-        if (!(await waitFor(isVessel, ENTRIES_WAIT_MS))) setIndex(filtersAt);
-        else setIndex(at + 1);
+        if (!(await waitFor(isVessel, ENTRIES_WAIT_MS))) {
+          await backToActivity(handle, focus);
+          setIndex(filtersAt);
+        } else setIndex(at + 1);
       } else if (current.id === "sanctioned") {
         const vessels = props.entries.filter((e) => e.tab === "sanctioned");
         const local = vessels.filter((e) => e.hotSpot === TOUR_HOT_SPOT);
         const pool = local.length > 0 ? local : vessels;
-        const repeated = pool.find((e) => (e.detections ?? 1) > 1);
-        const entry = repeated ?? pool[0];
-        if (!entry) setIndex(filtersAt);
-        else {
+        const entry = pool[0];
+        if (!entry) {
+          await backToActivity(handle, focus);
+          setIndex(filtersAt);
+        } else {
+          picked = entry;
           props.onSelect(entry);
           await sleep(POLL_MS);
           await handle?.whenSettled();
-          setMulti(Boolean(repeated) && (await waitFor(() => props.history.length > 0, HISTORY_WAIT_MS)));
           setIndex(at + 1);
         }
-      } else if (current.id === "vessels" && !repeatedKnown) setIndex(filtersAt);
-      else if (current.id === "positions") {
-        const previous = props.history[0];
-        if (previous) {
-          props.onPick(previous);
+      } else if (current.id === "vessels") {
+        await backToActivity(handle, focus);
+        setIndex(at + 1);
+      } else if (current.id === "time-range") {
+        const wider = widerFilter();
+        if (wider) {
+          await sleep(SLIDE_DELAY_MS);
+          await slideFrom(wider.from);
+          await waitFor(() => props.filter.from === wider.from, ENTRIES_WAIT_MS);
           await sleep(POLL_MS);
           await handle?.whenSettled();
-          const all = props.points.map((p) => ({ lon: p.lon, lat: p.lat }));
-          const lons = all.map((p) => p.lon);
-          const lats = all.map((p) => p.lat);
-          if (handle && all.length > 1) {
-            const bounds: Bounds = [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
-            await handle.fitBounds(bounds, FIT_PADDING_PX, TRACK_MAX_ZOOM);
-            await handle.whenSettled();
-          }
         }
         setIndex(at + 1);
-      } else if (current.id === "filters") finish();
+      } else if (current.id === "sources") {
+        await resetView();
+        setIndex(at + 1);
+      } else if (current.id === "done") finish();
       else setIndex(at + 1);
     } finally {
       setBusy(false);
@@ -337,14 +388,16 @@ export default function Tour(props: Props) {
               <div class="tour-count">
                 {index() + 1} / {STEPS.length}
               </div>
-              <h2 class="tour-title">{current().title}</h2>
-              <p class="tour-body">{!multi() && current().altBody ? current().altBody : current().body}</p>
+              <h2 class="tour-title">{read(current().title)}</h2>
+              <p class="tour-body">{read(current().body)}</p>
               <div class="tour-actions">
-                <button type="button" class="tour-button" onClick={finish}>
-                  Skip
-                </button>
+                <Show when={index() < STEPS.length - 1}>
+                  <button type="button" class="tour-button" onClick={finish}>
+                    Skip
+                  </button>
+                </Show>
                 <button type="button" class="tour-button tour-button-primary" onClick={() => void next()}>
-                  {index() === STEPS.length - 1 ? "Finish" : (current().next ?? "Next")}
+                  {read(current().next ?? "Next")}
                 </button>
               </div>
             </div>

@@ -9,7 +9,7 @@ interface Props {
 
 export default function Tabs(props: Props) {
   return (
-    <div class="tabs" role="tablist" data-tour="tabs">
+    <div class="tabs" role="tablist">
       <For each={TABS}>
         {(id) => (
           <button class={["tab", { "tab-active": id === props.tab }]} type="button" role="tab" aria-selected={id === props.tab ? "true" : "false"} onClick={() => id !== props.tab && props.onTab(id)}>
