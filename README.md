@@ -1,42 +1,46 @@
 # Dark Petro
 
-A public, read-only map of **suspected ship-to-ship (STS) oil transfers** found in free satellite imagery, and of
-**sanctioned vessels** caught on camera at the same places. This repository is the overview of the whole process, from a
-new satellite pass to a dot on the map, and it holds the part the public sees: the data build, the tile service and the web
-viewer.
+Dark Petro is a viewer for suspected ship-to-ship (STS) oil transfers, where two vessels meet at sea and move cargo from one
+to the other, and for vessels that are on sanctions lists. Both are found in free satellite imagery from the European
+Sentinel-1 (radar) and Sentinel-2 (optical) satellites, over five hot spots: areas of open sea where such transfers are known
+to happen. For each one the viewer shows where and when it was seen, the satellite capture, and who the vessels are according
+to AIS, the position signal that ships broadcast. The aim is to track illegal activity that could involve sanctioned vessels.
+This repository covers the whole process, from a new satellite pass to an icon on the map: the data build, the tile service
+and the web viewer.
 
-## What is Dark Petro
-
-The aim is to track illegal activity that could involve sanctioned vessels. Ship-to-ship (STS) transfer, where two vessels
-stop alongside each other at sea and move cargo across, is a questionable practice that helps countries get around sanctions
-and other economic restrictions. STS is not the problem in itself; it is a hint that something suspicious may be taking
-place, and we assume that vessels taking part in it are more likely to be sanctioned ones. The viewer has two tabs.
-
-### Suspicious activity
+## Suspicious activity
 
 ![Suspicious activity tab](docs/img/tab-suspicious-activity.png)
 
-Each entry is STS activity in a hot spot: two vessels lying alongside each other. The reel on the left lists what the map is
-showing, and the panel next to it shows the satellite capture, the time, the hot spot and who the vessels are according to
-AIS (name, flag, IMO), or that a hull had no AIS signal at all.
+Moving cargo between ships at sea helps countries get around sanctions and other economic restrictions. It is not a problem
+in itself, but it is a hint that something suspicious may be taking place, and we assume that vessels taking part in it are
+more likely to be sanctioned ones.
 
-### Sanctioned vessels
+Each entry is a pair of vessels lying alongside each other in a hot spot. The list on the left follows the map, and the panel
+next to it shows the satellite capture, the time, the hot spot and each vessel's name, flag and IMO number (the permanent
+number every ship carries) according to AIS, or that a vessel sent no AIS signal at all. We find the pairs in the satellite
+images with ship detectors and our own check for a second ship (see [How we detect STS activity](#how-we-detect-sts-activity)),
+and match each vessel to the archive of AIS signals.
+
+## Sanctioned vessels
 
 ![Sanctioned vessels tab](docs/img/tab-sanctioned-vessels.png)
 
-A watch list: ships already on a sanctions list. We follow them and record every time one is seen in a hot spot, so their
-behaviour can be checked, including whether they turn up in suspicious activity. A vessel appears once on the map with its
-newest sighting; the panel lists every sighting and links to any suspicious activity it took part in.
+A watch list of ships that are on a sanctions list, matched by their IMO number. We follow them and record every time one is
+seen in a hot spot, so their behaviour can be checked, including whether they turn up in suspicious activity.
+
+A vessel appears once on the map, at its newest sighting. The panel shows the capture and lists every sighting, with links to
+any suspicious activity it took part in. We find these vessels in the same satellite images: a single ship whose AIS signal
+identifies it as a sanctioned vessel is recorded as a sighting.
 
 ## Applying geo-intelligence
 
 ### Why these hot spots
 
-Findings are limited to a fixed set of **hot spots**: open-water areas where STS transfers are known to happen. We chose four
-of them from open-source reporting (OSINT), articles about the phenomenon in each area, linked below, and checked them by
-scanning other candidate areas with the same detectors so that the activity is really concentrated in these places. The
-fifth, Sikka, came out of that scan itself, as described under the table. We can only detect what Sentinel-1 and Sentinel-2
-cover.
+The viewer covers a fixed set of hot spots. We chose four of them from open-source reporting (OSINT), the news articles
+linked below, and checked them by scanning other areas with the same detectors, to make sure the activity is really
+concentrated in these places. The fifth, Sikka, came out of that scan itself, as described under the table. We can only detect
+what the Sentinel satellites cover.
 
 | Hot spot | Area | Article |
 |---|---|---|
@@ -48,53 +52,53 @@ cover.
 
 ### Sikka: how we found a new hot spot
 
-To look for new hot spots we scan the open sea between the known ones with the same detectors. The sea is cut into squares
-about the size of one satellite scene, squares are drawn at random and scanned on two dates, and the squares around any
-confirmed pair are scanned too, to see whether the activity continues. A new area qualifies when its confirmed pairs per
-scanned scene are in line with the existing hot spots.
+To look for new hot spots, we scan the open sea between the known ones. The sea is divided into squares, each about the size
+of one satellite image, and a random sample of them is checked on two dates. Where a square turns up pairs that a reviewer
+confirms, we check it and its neighbours on more dates, to see whether the activity keeps happening and where exactly it is
+concentrated. An area becomes a hot spot when it has about as many confirmed pairs per image as the hot spots we already have.
 
 ![Scan of the sea between the hot spots](docs/img/hotspot-scan.png)
 
-The red outlines are the existing hot spots. The two green squares, in the Gulf of Kutch off India's west coast, are Sikka
-and Vadinar: the only places where the scan confirmed pairs. They became the fifth hot spot in November 2026.
+The red outlines are the existing hot spots. The two green squares, in the Gulf of Kutch off India's west coast, cover Sikka
+and Vadinar. They were the only squares in the scan with pairs confirmed by a reviewer, and the area became the fifth hot spot.
 
 ### How we detect STS activity
 
-In a satellite image, STS activity shows as two hulls lying side by side. Every ship in a hot-spot image has to be found, and
-then we tell whether it is one hull or two. The examples below are real passes over Sohar.
+In a satellite image, STS activity looks like two ships lying side by side. We first find every ship in the image of a hot
+spot, then decide whether each one is a single ship or two lying together. The examples below are real passes over Sohar.
 
-**Finding the ship (Ai2).** Open, pre-trained ship detectors from the Allen Institute for AI, one per sensor, mark each ship
-with a box: position, length, width and heading. A box describes one object, so two ships side by side usually get a single
-box (cyan in the images below).
+**Finding the ship (Ai2).** Open, pre-trained ship detectors from the Allen Institute for AI, one for each satellite, mark each
+ship with a box that gives its position, length, width and heading. A box describes one object, so two ships side by side
+usually get a single box (cyan in the images below).
 
-**One hull or two.** This is our own check, and it differs by sensor:
+**One ship or two.** This is our own check, and it works differently for each satellite:
 
-- **Sentinel-1 (radar), geometry.** A metal hull is a bright return. We outline the bright area and look for two parallel
-  bright lines of ship length; two lines in a tanker-sized outline mean two hulls.
-- **Sentinel-2 (optical), spectral.** Each pixel is compared with the colour of the surrounding sea. The pixels that are not
-  sea show the shape of the hulls, and if that shape is wider than one ship and has a second hull beside the first, it is
-  STS activity.
+- **Sentinel-1 (radar).** Radar shows the metal body of a ship (its hull) as a bright area. We outline the bright area and
+  look for two parallel bright lines of ship length; two lines inside an outline the size of a tanker mean two ships.
+- **Sentinel-2 (optical).** Each pixel is compared with the colour of the surrounding sea. The pixels that are not sea show the
+  shape of the ships, and if that shape is wider than one ship and has a second ship beside the first, it is STS activity.
 
 **Sentinel-1**
 
 ![Sentinel-1 detection stages](docs/img/detection-s1.png)
 
-1. The detector draws one box over part of the bright return.
-2. The outline of the whole return is much larger than the box.
-3. Two parallel bright lines fit the return: two hulls.
-4. The finding is suspicious activity, with a numbered marker on each hull.
+1. The detector draws one box over part of the bright area.
+2. The outline of the whole bright area is much larger than the box.
+3. Two parallel bright lines fit the area: two ships.
+4. The result is suspicious activity, with a numbered marker on each ship.
 
 **Sentinel-2**
 
 ![Sentinel-2 detection stages](docs/img/detection-s2.png)
 
-1. The detector draws one box, covering only one of the hulls.
-2. The spectral map shows everything that is not sea: one shape, wider than a single ship.
-3. A cross-section of that shape has two shoulders, hull A (the one in the box) and hull B beside it.
-4. Both hulls are outlined and the finding is suspicious activity.
+1. The detector draws one box, covering only one of the ships.
+2. The spectral map, which compares every pixel with the sea, shows everything that is not sea: one shape, wider than a single
+   ship.
+3. A cross-section of that shape has two shoulders: hull A (the one in the box) and hull B beside it.
+4. Both ships are outlined and the result is suspicious activity.
 
-Each hull is then matched to the AIS archive, so it becomes a named vessel or a vessel with no AIS signal. A ship that is on a
-sanctions list is recorded as a sanctioned vessel.
+Each ship is then matched to the archive of AIS signals, so it becomes a named vessel or a vessel with no AIS signal. A ship
+that is on a sanctions list is recorded as a sanctioned vessel.
 
 ## The architecture
 
@@ -108,8 +112,8 @@ sanctions list is recorded as a sanctioned vessel.
 1. **Watch.** Every few hours we check the public Sentinel catalogues for new passes over each hot spot. Each one becomes a
    job.
 2. **Download and tile.** The satellite scene is downloaded and cut into small image tiles that the detector can read.
-3. **Detect.** Ships are found and each one is checked for a second hull alongside it, as described above.
-4. **Add AIS.** Each hull is matched to the AIS archive and checked against the sanctions lists.
+3. **Detect.** Ships are found and each one is checked for a second ship alongside it, as described above.
+4. **Add AIS.** Each ship is matched to the archive of AIS signals and checked against the sanctions lists.
 5. **Publish.** The findings are saved and prepared for viewing, and the web viewer rebuilds the data it shows whenever they
    change.
 
@@ -122,4 +126,4 @@ sanctions list is recorded as a sanctioned vessel.
 
 The control host sends each job to the prep worker, which hands over to the GPU worker; the workers run only when there are
 jobs. Everything that is kept lives in the shared cloud storage (S3), which belongs to no machine; the workers use their own
-disks only as scratch space.
+disks only for temporary working files.
