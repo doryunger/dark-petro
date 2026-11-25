@@ -21,7 +21,6 @@ export default function EntryCard(props: Props) {
       type="button"
       class={["entry", { "entry-selected": props.selected, "entry-pinned": props.pinned, "entry-open": props.open, "entry-has-indicators": hasIndicators() }]}
       style={{ top: props.top }}
-      data-tour={props.selected ? "card" : undefined}
       title={props.pinned ? "Outside the current map view. Click to go back to it." : undefined}
       aria-label={`${entryTitle(props.entry)}${props.pinned ? ", outside the current map view" : ""}${props.entry.hasRelatedActivity ? ", has related suspicious activity" : ""}`}
       onClick={() => props.onSelect(props.entry)}

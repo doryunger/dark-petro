@@ -620,15 +620,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.details-placeholder {
-  grid-row: 2 / -1;
-  margin: 0;
-  padding: 1rem;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: #9fb3c2;
-}
-
 .details-content {
   min-height: 0;
   overflow-y: auto;

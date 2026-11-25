@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, onSettled, Show } from "solid-js";
 import Details from "./components/Details";
-import Filters from "./components/Filters";
+import Filters, { type FiltersHandle } from "./components/Filters";
 import Header from "./components/Header";
 import MapView, { type MapHandle } from "./components/MapView";
 import Reel, { type ReelHandle } from "./components/Reel";
@@ -71,6 +71,7 @@ export default function App() {
   const [settled, setSettled] = createSignal(true);
   let mapHandle: MapHandle | undefined;
   let reelHandle: ReelHandle | undefined;
+  let filtersHandle: FiltersHandle | undefined;
   let vesselOpenRequest = 0;
 
   const selected = createMemo(() => selection().entry);
@@ -343,7 +344,14 @@ export default function App() {
     <>
       <Header />
       <Show when={meta() && filter()} fallback={<section class="filters" />}>
-        <Filters meta={meta() as Meta} applied={filter() as Filter} onApply={apply} />
+        <Filters
+          ref={(handle) => {
+            filtersHandle = handle;
+          }}
+          meta={meta() as Meta}
+          applied={filter() as Filter}
+          onApply={apply}
+        />
       </Show>
       <Reel
         ref={(handle) => {
@@ -375,7 +383,7 @@ export default function App() {
         onBack={goBack}
       />
       <Show when={TOUR_ENABLED && hasView()}>
-        <Tour map={() => mapHandle} hotSpots={hotSpots() as HotSpotCollection} entries={viewEntries()} history={history()} points={points()} onSelect={(entry) => select(entry, true)} onTab={changeTab} onPick={pick} />
+        <Tour map={() => mapHandle} filter={filter() as Filter} meta={meta()} onFilter={apply} onSlide={(span) => filtersHandle?.slide(span)} hotSpots={hotSpots() as HotSpotCollection} entries={viewEntries()} onSelect={(entry) => select(entry, true)} onTab={changeTab} />
       </Show>
       <Show when={hasView()} fallback={<main class="map" />}>
         <MapView

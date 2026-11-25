@@ -26,7 +26,7 @@ export default function History(props: Props) {
   );
 
   return (
-    <div class="history" data-tour="history" style={{ top: props.top, height: `${props.height}rem` }} ref={(el) => (box = el)}>
+    <div class="history" style={{ top: props.top, height: `${props.height}rem` }} ref={(el) => (box = el)}>
       <For each={props.items} keyed={(entry) => entry.id}>
         {(entry) => (
           <button type="button" data-id={entry().id} class={["history-item", { "history-item-selected": entry().id === props.pickedId }]} onClick={() => props.onPick(entry())}>

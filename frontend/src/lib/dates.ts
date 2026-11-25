@@ -1,4 +1,4 @@
-import { WEEK_DAYS } from "./constants";
+import { DEFAULT_RANGE_DAYS } from "./constants";
 import type { Filter, Meta } from "./types";
 
 const DAY_MS = 86400000;
@@ -38,7 +38,7 @@ export function clamp(value: number, low: number, high: number): number {
 }
 
 export function defaultFilter(today: string, sources: string[]): Filter {
-  return { from: addDays(today, 1 - WEEK_DAYS), to: today, sources: [...sources] };
+  return { from: addDays(today, 1 - DEFAULT_RANGE_DAYS), to: today, sources: [...sources] };
 }
 
 export function sliderRange(filter: Filter, minDate: string, maxDate: string): [number, number] {
