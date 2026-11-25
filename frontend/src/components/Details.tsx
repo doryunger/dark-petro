@@ -94,7 +94,7 @@ export default function Details(props: Props) {
   return (
     <section class="details" data-tour="details">
       <DetailsHeading />
-      <Show when={props.entry} keyed fallback={<p class="details-placeholder">Select a finding from the list or the map to see its capture and details here.</p>}>
+      <Show when={props.entry} keyed>
         {(entry) => (
           <>
             <header class="details-entry">

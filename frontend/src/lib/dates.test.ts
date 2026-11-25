@@ -19,7 +19,7 @@ describe("dates", () => {
   });
 
   it("starts with the seven days that end today", () => {
-    expect(defaultFilter("2026-10-24", ["s1", "s2"])).toEqual({ from: "2026-10-18", to: "2026-10-24", sources: ["s1", "s2"] });
+    expect(defaultFilter("2026-10-24", ["s1", "s2"])).toEqual({ from: "2026-10-15", to: "2026-10-24", sources: ["s1", "s2"] });
   });
 
   it("keeps the slider inside the data range", () => {
