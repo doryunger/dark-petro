@@ -19,3 +19,4 @@ export const DEFAULT_RANGE_DAYS = 10;
 export const TAB_LABELS: Record<Tab, string> = { pairs: "Suspicious activity", sanctioned: "Sanctioned vessels" };
 export const TABS: Tab[] = ["pairs", "sanctioned"];
 export const TOUR_HOT_SPOT = "fujairah_outer";
+export const TOUR_MIN_PREVIOUS = 2;

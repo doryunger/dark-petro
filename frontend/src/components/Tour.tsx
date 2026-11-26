@@ -1,14 +1,15 @@
 import { createEffect, createMemo, createSignal, For, onSettled, Show, untrack } from "solid-js";
-import { DEFAULT_RANGE_DAYS, START_MAX_ZOOM, TOUR_HOT_SPOT } from "../lib/constants";
+import { DEFAULT_RANGE_DAYS, START_MAX_ZOOM, TOUR_HOT_SPOT, TOUR_MIN_PREVIOUS } from "../lib/constants";
 import { addDays, dayIndex } from "../lib/dates";
 import { featureBounds } from "../lib/geo";
 import { markTourSeen } from "../lib/tourSeen";
-import { minSide, padRect, placeCard, rectOfPoints, type Point, type Rect, type Size } from "../lib/tour";
+import { minSide, padRect, placeCard, previousPositions, rectOfPoints, tourVessel, type Point, type Rect, type Size } from "../lib/tour";
 import type { Entry, Filter, HotSpotCollection, HotSpotFeature, Meta, Tab } from "../lib/types";
 import type { MapHandle } from "./MapView";
 
 const START_DELAY_MS = 600;
 const ENTRIES_WAIT_MS = 6000;
+const VIEW_WAIT_MS = 2000;
 const POLL_MS = 200;
 const HIGHLIGHT_PAD_PX = 8;
 const MIN_HIGHLIGHT_PX = 56;
@@ -272,6 +273,19 @@ export default function Tour(props: Props) {
     await waitFor(() => props.entries.some((e) => e.tab === "pairs"), ENTRIES_WAIT_MS);
   };
 
+  const hasHistory = () => {
+    const vessel = tourVessel(props.entries, TOUR_HOT_SPOT);
+    return vessel !== null && previousPositions(vessel) >= TOUR_MIN_PREVIOUS;
+  };
+
+  const widenToHistory = async (handle: MapHandle | undefined) => {
+    const bounds = featureBounds(props.hotSpots);
+    if (hasHistory() || !handle || !bounds) return;
+    await handle.fitBounds(bounds, RESET_PADDING_PX, START_MAX_ZOOM);
+    await handle.whenSettled();
+    await waitFor(hasHistory, VIEW_WAIT_MS);
+  };
+
   const next = async () => {
     const current = step();
     if (!current || busy()) return;
@@ -308,15 +322,15 @@ export default function Tour(props: Props) {
         if (handle && bounds) await handle.fitBounds(bounds, FIT_PADDING_PX);
         await handle?.whenSettled();
         const isVessel = () => props.entries.some((e) => e.tab === "sanctioned");
-        if (!(await waitFor(isVessel, ENTRIES_WAIT_MS))) {
+        await waitFor(isVessel, VIEW_WAIT_MS);
+        await widenToHistory(handle);
+        if (isVessel()) setIndex(at + 1);
+        else {
           await backToActivity(handle, focus);
           setIndex(filtersAt);
-        } else setIndex(at + 1);
+        }
       } else if (current.id === "sanctioned") {
-        const vessels = props.entries.filter((e) => e.tab === "sanctioned");
-        const local = vessels.filter((e) => e.hotSpot === TOUR_HOT_SPOT);
-        const pool = local.length > 0 ? local : vessels;
-        const entry = pool[0];
+        const entry = tourVessel(props.entries, TOUR_HOT_SPOT);
         if (!entry) {
           await backToActivity(handle, focus);
           setIndex(filtersAt);

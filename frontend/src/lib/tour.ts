@@ -1,3 +1,5 @@
+import type { Entry } from "./types";
+
 export interface Rect {
   left: number;
   top: number;
@@ -67,4 +69,12 @@ export function placeCard(targets: Rect[], card: Size, area: Rect): Point {
     }
   }
   return best ? { x: best.x, y: best.y } : { x: minX, y: minY };
+}
+
+export const previousPositions = (entry: Entry) => (entry.detections ?? 1) - 1;
+
+export function tourVessel(entries: Entry[], hotSpot: string): Entry | null {
+  const local = (entry: Entry) => Number(entry.hotSpot === hotSpot);
+  const ranked = entries.filter((e) => e.tab === "sanctioned").sort((a, b) => previousPositions(b) - previousPositions(a) || local(b) - local(a) || b.t - a.t);
+  return ranked[0] ?? null;
 }
