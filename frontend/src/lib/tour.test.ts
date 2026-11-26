@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { minSide, padRect, placeCard, rectOfPoints, type Rect } from "./tour";
+import { minSide, padRect, placeCard, previousPositions, rectOfPoints, tourVessel, type Rect } from "./tour";
+import type { Entry } from "./types";
 
 const screen: Rect = { left: 0, top: 0, right: 1200, bottom: 800 };
 const card = { width: 320, height: 200 };
 const hits = (a: Rect, b: Rect) => Math.min(a.right, b.right) > Math.max(a.left, b.left) && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
 
+const vessel = (id: string, detections: number, hotSpot = "off_sohar", tab: Entry["tab"] = "sanctioned") => ({ id, detections, hotSpot, tab, t: 0 }) as Entry;
+
 describe("tour", () => {
+  it("picks the vessel with the most previous positions, wherever it is in the list", () => {
+    const entries = [vessel("single", 1, "fujairah_outer"), vessel("repeat", 3, "fujairah_outer"), vessel("most", 5)];
+    expect(tourVessel(entries, "fujairah_outer")?.id).toBe("most");
+    expect(previousPositions(entries[2])).toBe(4);
+  });
+
+  it("prefers the tour's hot spot between vessels with as many positions", () => {
+    expect(tourVessel([vessel("away", 3), vessel("local", 3, "fujairah_outer")], "fujairah_outer")?.id).toBe("local");
+  });
+
+  it("picks no vessel when only pairs are listed", () => {
+    expect(tourVessel([vessel("pair", 4, "off_sohar", "pairs")], "off_sohar")).toBeNull();
+  });
+
   it("wraps projected points in a rectangle", () => {
     expect(rectOfPoints([{ x: 5, y: 9 }, { x: 1, y: 3 }, { x: 4, y: 7 }])).toEqual({ left: 1, top: 3, right: 5, bottom: 9 });
     expect(rectOfPoints([])).toBeNull();
