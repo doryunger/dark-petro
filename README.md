@@ -1,12 +1,15 @@
-# Dark Petro
+# Dark Petro(leum)
 
-Dark Petro is a viewer for suspected ship-to-ship (STS) oil transfers, where two vessels meet at sea and move cargo from one
-to the other, and for vessels that are on sanctions lists. Both are found in free satellite imagery from the European
-Sentinel-1 (radar) and Sentinel-2 (optical) satellites, over five hot spots: areas of open sea where such transfers are known
-to happen. For each one the viewer shows where and when it was seen, the satellite capture, and who the vessels are according
-to AIS, the position signal that ships broadcast. The aim is to track illegal activity that could involve sanctioned vessels.
-This repository covers the whole process, from a new satellite pass to an icon on the map: the data build, the tile service
-and the web viewer.
+Dark Petro is an open-source intelligence (OSINT) viewer for suspected ship-to-ship (STS) oil transfers, where oil is pumped
+between two vessels in open sea. Its aim is to track illegal activity that could involve sanctioned vessels, so it also records
+every time a sanctioned vessel is seen in the same areas.
+
+Dark-fleet trackers mostly follow vessels through AIS, the position signal that ships broadcast, and some back their STS alerts
+with satellite imagery, but as commercial services. Dark Petro starts from the transfer itself: it finds suspected transfers in
+public satellite imagery over defined areas of open sea and publishes each one, with its capture, for free.
+
+That imagery comes from the Sentinel satellites, which also sets the limits: updates are bound to their passes over each area,
+and detection depends on the quality of each image and on its resolution, about 10 metres per pixel.
 
 **Live viewer: [darkpetro.stamsite.cc](https://darkpetro.stamsite.cc/)**
 
